@@ -1,0 +1,14 @@
+{
+  "key.orvwindow.open": "เปิดหน้าต่างระบบ",
+  "category.orvwindow": "ORV System Window",
+  "orvwindow.title": "หน้าต่างสถานะ",
+  "orvwindow.label.name": "ชื่อ",
+  "orvwindow.label.age": "อายุ",
+  "orvwindow.label.gender": "เพศ",
+  "orvwindow.label.constellation": "สังกัดดวงดาว",
+  "orvwindow.constellation.none": "ไม่มี",
+  "orvwindow.gender.0": "ชาย",
+  "orvwindow.gender.1": "หญิง",
+  "orvwindow.gender.2": "ไม่ระบุ",
+  "orvwindow.hint": "กด Esc เพื่อบันทึกและปิด"
+}

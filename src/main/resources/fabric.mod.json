@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "orvwindow",
+  "version": "${version}",
+  "name": "ORV System Window",
+  "description": "Status window inspired by Omniscient Reader's Viewpoint.",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["com.orv.window.OrvWindowClient"]
+  },
+  "depends": {
+    "fabricloader": ">=0.15.0",
+    "minecraft": "~1.20.1",
+    "java": ">=17",
+    "fabric-api": "*"
+  }
+}
