@@ -13,9 +13,13 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Common side: relays "window open/closed" so other players can see the (empty) window. */
 public class OrvWindowMod implements ModInitializer {
+	/** client -> server: my window opened/closed. server -> other clients: (uuid, open). */
 	public static final Identifier STATE = new Identifier("orvwindow", "state");
+	/** client -> server: (skill id, add?) from an op. */
+	public static final Identifier GRANT = new Identifier("orvwindow", "grant");
+	/** server -> client: the full list of passives this player owns. */
+	public static final Identifier SKILLS = new Identifier("orvwindow", "skills");
 
 	private static final Set<UUID> OPEN = ConcurrentHashMap.newKeySet();
 
@@ -34,10 +38,26 @@ public class OrvWindowMod implements ModInitializer {
 			});
 		});
 
+		ServerPlayNetworking.registerGlobalReceiver(GRANT, (server, player, handler, buf, responseSender) -> {
+			String skill = buf.readString(64);
+			boolean add = buf.readBoolean();
+			server.execute(() -> {
+				if (!player.hasPermissionLevel(2) || !Passives.exists(skill)) {
+					return;
+				}
+				SkillState st = SkillState.get(server);
+				boolean changed = add ? st.add(player.getUuid(), skill) : st.remove(player.getUuid(), skill);
+				if (changed) {
+					sendSkills(player, st);
+				}
+			});
+		});
+
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
 			for (UUID id : OPEN) {
 				send(handler.player, id, true);
 			}
+			sendSkills(handler.player, SkillState.get(server));
 		});
 
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
@@ -46,6 +66,16 @@ public class OrvWindowMod implements ModInitializer {
 				broadcast(server, id, false);
 			}
 		});
+	}
+
+	private static void sendSkills(ServerPlayerEntity player, SkillState st) {
+		Set<String> owned = st.skillsOf(player.getUuid());
+		PacketByteBuf out = PacketByteBufs.create();
+		out.writeVarInt(owned.size());
+		for (String s : owned) {
+			out.writeString(s);
+		}
+		ServerPlayNetworking.send(player, SKILLS, out);
 	}
 
 	private static void broadcast(MinecraftServer server, UUID who, boolean open) {
