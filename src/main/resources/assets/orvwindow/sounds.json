@@ -1,0 +1,8 @@
+{
+  "window_open": {
+    "sounds": ["orvwindow:window_open"]
+  },
+  "window_close": {
+    "sounds": ["orvwindow:window_close"]
+  }
+}

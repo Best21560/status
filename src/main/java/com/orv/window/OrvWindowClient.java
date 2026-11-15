@@ -10,23 +10,27 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
+import net.minecraft.client.sound.PositionedSoundInstance;
 import net.minecraft.client.util.InputUtil;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.network.PacketByteBuf;
+import net.minecraft.sound.SoundCategory;
 import net.minecraft.text.Text;
 import org.lwjgl.glfw.GLFW;
 
-import java.util.Set;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class OrvWindowClient implements ClientModInitializer {
 	public static KeyBinding openKey;
 
-	/** Is my own window open? */
-	public static boolean selfOpen = false;
-	/** Other players whose window is open (they see the empty frame only). */
-	public static final Set<UUID> OTHERS = ConcurrentHashMap.newKeySet();
+	/** My own window. */
+	public static final WindowAnim SELF = new WindowAnim();
+	/** Other players whose window is open or still closing (they see the empty frame only). */
+	public static final Map<UUID, WindowAnim> OTHERS = new ConcurrentHashMap<>();
 
 	@Override
 	public void onInitializeClient() {
@@ -42,8 +46,11 @@ public class OrvWindowClient implements ClientModInitializer {
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			while (openKey.wasPressed()) {
 				if (client.player != null && client.currentScreen == null) {
-					selfOpen = !selfOpen;
-					sendState(selfOpen);
+					boolean now = !SELF.open;
+					SELF.set(now);
+					sendState(now);
+					client.getSoundManager().play(PositionedSoundInstance.master(
+							now ? OrvSounds.OPEN : OrvSounds.CLOSE, 1.0f, 0.8f));
 				}
 			}
 		});
@@ -53,19 +60,30 @@ public class OrvWindowClient implements ClientModInitializer {
 			boolean open = buf.readBoolean();
 			client.execute(() -> {
 				if (open) {
-					OTHERS.add(id);
+					OTHERS.computeIfAbsent(id, k -> new WindowAnim()).set(true);
 				} else {
-					OTHERS.remove(id);
+					WindowAnim a = OTHERS.get(id);
+					if (a != null) {
+						a.set(false);
+					}
+				}
+				if (client.world != null) {
+					PlayerEntity p = client.world.getPlayerByUuid(id);
+					if (p != null) {
+						client.world.playSound(p.getX(), p.getEyeY(), p.getZ(),
+								open ? OrvSounds.OPEN : OrvSounds.CLOSE,
+								SoundCategory.PLAYERS, 0.6f, 1.0f, false);
+					}
 				}
 			});
 		});
 
 		ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
-			selfOpen = false;
+			SELF.reset();
 			OTHERS.clear();
 		});
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
-			selfOpen = false;
+			SELF.reset();
 			OTHERS.clear();
 		});
 

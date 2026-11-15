@@ -17,7 +17,9 @@ import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import org.joml.Matrix4f;
 
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /** Draws the floating window in the world, in front of a player. */
@@ -31,9 +33,13 @@ public class StatusRenderer {
 	private static final double HALF_H = TEXT_H * SCALE / 2.0;
 	private static final double DISTANCE = 1.7;
 
-	private static final int FILL_TOP = 0xD0309AD6;
-	private static final int FILL_BOTTOM = 0xD07FD6FF;
-	private static final int BORDER = 0xFF9BE3FF;
+	// all blue, no white
+	private static final int FILL_TOP = 0xD01B5FC8;
+	private static final int FILL_BOTTOM = 0xD02FA8F5;
+	private static final int BORDER = 0xFF2AA6FF;
+	private static final int BRACKET = 0xFF4FC8FF;
+	private static final int BAND = 0x403BB5FF;
+	private static final int BAND_CLEAR = 0x003BB5FF;
 
 	private static final VertexConsumerProvider.Immediate TEXT = VertexConsumerProvider.immediate(new BufferBuilder(1024));
 
@@ -47,19 +53,41 @@ public class StatusRenderer {
 		MatrixStack ms = ctx.matrixStack();
 		boolean firstPerson = mc.options.getPerspective().isFirstPerson();
 
-		if (OrvWindowClient.selfOpen) {
-			drawFor(mc, ms, cam, mc.player, td, firstPerson, true);
+		WindowAnim self = OrvWindowClient.SELF;
+		if (self.visible()) {
+			float p = self.update();
+			if (p > 0f) {
+				drawFor(mc, ms, cam, mc.player, td, firstPerson, true, p);
+			}
 		}
-		for (UUID id : OrvWindowClient.OTHERS) {
-			PlayerEntity p = mc.world.getPlayerByUuid(id);
-			if (p != null && p != mc.player && !p.isInvisible()) {
-				drawFor(mc, ms, cam, p, td, false, false);
+
+		Iterator<Map.Entry<UUID, WindowAnim>> it = OrvWindowClient.OTHERS.entrySet().iterator();
+		while (it.hasNext()) {
+			Map.Entry<UUID, WindowAnim> e = it.next();
+			WindowAnim a = e.getValue();
+			float p = a.update();
+			if (!a.open && p <= 0f) {
+				it.remove();
+				continue;
+			}
+			PlayerEntity pl = mc.world.getPlayerByUuid(e.getKey());
+			if (pl != null && pl != mc.player && !pl.isInvisible() && p > 0f) {
+				drawFor(mc, ms, cam, pl, td, false, false, p);
 			}
 		}
 	}
 
+	private static float clamp01(float x) {
+		return x < 0f ? 0f : (x > 1f ? 1f : x);
+	}
+
+	private static float easeOut(float x) {
+		float k = 1f - x;
+		return 1f - k * k * k;
+	}
+
 	private static void drawFor(MinecraftClient mc, MatrixStack ms, Vec3d cam, PlayerEntity player,
-								float td, boolean showText, boolean self) {
+								float td, boolean showText, boolean self, float p) {
 		double yawDeg = self
 				? player.getYaw(td)
 				: MathHelper.lerpAngleDegrees(td, player.prevHeadYaw, player.headYaw);
@@ -72,6 +100,12 @@ public class StatusRenderer {
 
 		Vec3d eye = player.getCameraPosVec(td);
 		Vec3d center = eye.add(f.multiply(DISTANCE)).add(0, -0.05, 0).subtract(cam);
+
+		// opening: first a line grows wide, then it grows tall (closing plays this backwards)
+		float w = easeOut(clamp01(p / 0.5f));
+		float h = easeOut(clamp01((p - 0.4f) / 0.6f));
+		double hw = Math.max(0.01, HALF_W * w);
+		double hh = Math.max(0.006, HALF_H * h);
 
 		Matrix4f m = ms.peek().getPositionMatrix();
 
@@ -88,18 +122,50 @@ public class StatusRenderer {
 
 		BufferBuilder b = Tessellator.getInstance().getBuffer();
 		b.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR);
-		double hw = HALF_W;
-		double hh = HALF_H;
-		double t = 0.025;
+
+		double t = Math.min(0.025, hh * 0.9);
 		quad(b, m, center, right, up, -hw, -hh, hw, hh, FILL_BOTTOM, FILL_TOP);
+
+		if (h > 0.6f) {
+			// slow scan band moving down the screen
+			double period = 2.6;
+			double ph = ((System.nanoTime() / 1_000_000_000.0) % period) / period;
+			double by = hh - ph * 2.0 * hh;
+			double bh = 0.09;
+			double lo0 = Math.max(-hh, by - bh);
+			double lo1 = Math.min(hh, by);
+			if (lo1 > lo0) {
+				quad(b, m, center, right, up, -hw + t, lo0, hw - t, lo1, BAND_CLEAR, BAND);
+			}
+			double up0 = Math.max(-hh, by);
+			double up1 = Math.min(hh, by + bh);
+			if (up1 > up0) {
+				quad(b, m, center, right, up, -hw + t, up0, hw - t, up1, BAND, BAND_CLEAR);
+			}
+		}
+
+		// border
 		quad(b, m, center, right, up, -hw, hh - t, hw, hh, BORDER, BORDER);
 		quad(b, m, center, right, up, -hw, -hh, hw, -hh + t, BORDER, BORDER);
 		quad(b, m, center, right, up, -hw, -hh, -hw + t, hh, BORDER, BORDER);
 		quad(b, m, center, right, up, hw - t, -hh, hw, hh, BORDER, BORDER);
+
+		if (h > 0.6f) {
+			// futuristic corner brackets
+			double len = 0.14;
+			double th = 0.022;
+			for (int sx = -1; sx <= 1; sx += 2) {
+				for (int sy = -1; sy <= 1; sy += 2) {
+					quad(b, m, center, right, up, sx * hw, sy * hh, sx * (hw - len), sy * (hh - th), BRACKET, BRACKET);
+					quad(b, m, center, right, up, sx * hw, sy * hh, sx * (hw - th), sy * (hh - len), BRACKET, BRACKET);
+				}
+			}
+		}
 		Tessellator.getInstance().draw();
 
-		if (showText) {
-			drawText(mc, m, center, right, up, f);
+		if (showText && p > 0.85f) {
+			float a = clamp01((p - 0.85f) / 0.15f);
+			drawText(mc, m, center, right, up, f, a);
 		}
 
 		RenderSystem.enableCull();
@@ -108,7 +174,10 @@ public class StatusRenderer {
 		RenderSystem.disableBlend();
 	}
 
-	private static void drawText(MinecraftClient mc, Matrix4f m, Vec3d center, Vec3d right, Vec3d up, Vec3d f) {
+	private static void drawText(MinecraftClient mc, Matrix4f m, Vec3d center, Vec3d right, Vec3d up, Vec3d f, float alpha) {
+		int a = Math.max(8, (int) (alpha * 255f));
+		int color = (a << 24) | 0xFFFFFF;
+
 		TextRenderer tr = mc.textRenderer;
 		float s = SCALE;
 
@@ -133,7 +202,7 @@ public class StatusRenderer {
 			float w = tr.getWidth(line);
 			float x = (TEXT_W - w) / 2f;
 			float y = 12f + i * 15f;
-			tr.draw(line, x, y, 0xFFFFFFFF, true, tm, TEXT,
+			tr.draw(line, x, y, color, true, tm, TEXT,
 					TextRenderer.TextLayerType.SEE_THROUGH, 0, 0xF000F0);
 		}
 		TEXT.draw();
