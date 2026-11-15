@@ -1,14 +1,16 @@
 {
-  "key.orvwindow.open": "เปิดหน้าต่างระบบ",
+  "key.orvwindow.open": "เปิด/ปิดหน้าต่างสถานะ",
   "category.orvwindow": "ORV System Window",
-  "orvwindow.title": "หน้าต่างสถานะ",
-  "orvwindow.label.name": "ชื่อ",
-  "orvwindow.label.age": "อายุ",
-  "orvwindow.label.gender": "เพศ",
-  "orvwindow.label.constellation": "สังกัดดวงดาว",
-  "orvwindow.constellation.none": "ไม่มี",
-  "orvwindow.gender.0": "ชาย",
-  "orvwindow.gender.1": "หญิง",
-  "orvwindow.gender.2": "ไม่ระบุ",
-  "orvwindow.hint": "กด Esc เพื่อบันทึกและปิด"
+  "orvwindow.name_set": "ตั้งชื่อเป็น %s แล้ว",
+  "orvwindow.line.name": "ชื่อ : %s",
+  "orvwindow.line.race": "เผ่าพันธุ์ : มนุษย์",
+  "orvwindow.line.class": "คลาส : -",
+  "orvwindow.line.level": "เลเวล : %s (%s%%)",
+  "orvwindow.line.title": "TITLE : -",
+  "orvwindow.line.achievements": "ความสำเร็จ : %s",
+  "orvwindow.line.hpmp": "HP : %s / MP : %s",
+  "orvwindow.line.str_dex": "STR %s, DEX %s",
+  "orvwindow.line.int_con": "INT %s, CON %s",
+  "orvwindow.line.will": "WILL %s",
+  "orvwindow.line.points": "พ้อยต์ที่เหลือ : %s"
 }

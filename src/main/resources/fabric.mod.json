@@ -3,9 +3,10 @@
   "id": "orvwindow",
   "version": "${version}",
   "name": "ORV System Window",
-  "description": "Status window inspired by Omniscient Reader's Viewpoint.",
-  "environment": "client",
+  "description": "Floating status window inspired by manhwa system windows.",
+  "environment": "*",
   "entrypoints": {
+    "main": ["com.orv.window.OrvWindowMod"],
     "client": ["com.orv.window.OrvWindowClient"]
   },
   "depends": {
