@@ -9,7 +9,6 @@ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
-import net.fabricmc.fabric.api.event.client.player.ClientPreAttackCallback;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
@@ -36,6 +35,8 @@ public class OrvWindowClient implements ClientModInitializer {
 	public static final Map<UUID, WindowAnim> OTHERS = new ConcurrentHashMap<>();
 	/** Passive skills I own (ids), synced from the server. */
 	public static volatile Set<String> mySkills = Set.of();
+	/** Skill points I can spend in the shop, synced from the server. */
+	public static volatile int myPoints = 0;
 
 	@Override
 	public void onInitializeClient() {
@@ -51,24 +52,9 @@ public class OrvWindowClient implements ClientModInitializer {
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			while (openKey.wasPressed()) {
 				if (client.player != null && client.currentScreen == null) {
-					boolean now = !SELF.open;
-					SELF.set(now);
-					sendState(now);
-					client.getSoundManager().play(PositionedSoundInstance.master(
-							now ? OrvSounds.OPEN : OrvSounds.CLOSE, 1.0f, 0.8f));
+					openWindow(client);
 				}
 			}
-		});
-
-		// Left-click while aiming at the "+" button opens the skill list instead of attacking.
-		ClientPreAttackCallback.EVENT.register((client, player, clickCount) -> {
-			if (SELF.open && SELF.progress >= 0.9f && client.currentScreen == null
-					&& client.options.getPerspective().isFirstPerson()
-					&& canGrant(player) && StatusRenderer.aimingAtPlus(player, 1.0f)) {
-				client.setScreen(new SkillPickerScreen());
-				return true;
-			}
-			return false;
 		});
 
 		ClientPlayNetworking.registerGlobalReceiver(OrvWindowMod.STATE, (client, handler, buf, responseSender) -> {
@@ -100,7 +86,11 @@ public class OrvWindowClient implements ClientModInitializer {
 			for (int i = 0; i < n; i++) {
 				set.add(buf.readString(64));
 			}
-			client.execute(() -> mySkills = set);
+			int pts = buf.readVarInt();
+			client.execute(() -> {
+				mySkills = set;
+				myPoints = pts;
+			});
 		});
 
 		ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
@@ -111,6 +101,7 @@ public class OrvWindowClient implements ClientModInitializer {
 			SELF.reset();
 			OTHERS.clear();
 			mySkills = Set.of();
+			myPoints = 0;
 		});
 
 		// /status name <ชื่อ>
@@ -132,6 +123,25 @@ public class OrvWindowClient implements ClientModInitializer {
 		WorldRenderEvents.LAST.register(StatusRenderer::render);
 	}
 
+	/** Open the window and release the mouse cursor so it can be used on the window. */
+	public static void openWindow(MinecraftClient client) {
+		if (!SELF.open) {
+			SELF.set(true);
+			sendState(true);
+			client.getSoundManager().play(PositionedSoundInstance.master(OrvSounds.OPEN, 1.0f, 0.8f));
+		}
+		client.setScreen(new WindowScreen());
+	}
+
+	/** Collapse the window (called when the cursor screen closes). */
+	public static void closeWindow() {
+		if (SELF.open) {
+			SELF.set(false);
+			sendState(false);
+			MinecraftClient.getInstance().getSoundManager().play(PositionedSoundInstance.master(OrvSounds.CLOSE, 1.0f, 0.8f));
+		}
+	}
+
 	/** Ops (permission level 2+) may add passives directly. */
 	public static boolean canGrant(PlayerEntity player) {
 		return player != null && player.hasPermissionLevel(2);
@@ -143,6 +153,14 @@ public class OrvWindowClient implements ClientModInitializer {
 			buf.writeString(skillId);
 			buf.writeBoolean(add);
 			ClientPlayNetworking.send(OrvWindowMod.GRANT, buf);
+		}
+	}
+
+	public static void sendBuy(String skillId) {
+		if (ClientPlayNetworking.canSend(OrvWindowMod.BUY)) {
+			PacketByteBuf buf = PacketByteBufs.create();
+			buf.writeString(skillId);
+			ClientPlayNetworking.send(OrvWindowMod.BUY, buf);
 		}
 	}
 

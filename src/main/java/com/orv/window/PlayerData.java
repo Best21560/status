@@ -67,20 +67,8 @@ public class PlayerData {
 		}
 	}
 
-	/** The lines shown on the window, top to bottom. */
-	public static List<Text> lines() {
-		String shown = name;
-		MinecraftClient mc = MinecraftClient.getInstance();
-		if (shown.isEmpty() && mc.player != null) {
-			shown = mc.player.getName().getString();
-		}
-		List<Text> l = new ArrayList<>();
-		l.add(Text.translatable("orvwindow.line.name", shown));
-		l.add(Text.translatable("orvwindow.line.race"));
-		l.add(Text.translatable("orvwindow.line.class"));
-		l.add(Text.translatable("orvwindow.line.level", LEVEL, EXP_PERCENT));
-		l.add(Text.translatable("orvwindow.line.unique")); // must stay at index UNIQUE_ROW
-
+	/** Passives I own, in registry order. */
+	public static List<Passives.Def> ownedDefs() {
 		Set<String> owned = OrvWindowClient.mySkills;
 		List<Passives.Def> have = new ArrayList<>();
 		for (Passives.Def d : Passives.ALL) {
@@ -88,10 +76,37 @@ public class PlayerData {
 				have.add(d);
 			}
 		}
+		return have;
+	}
+
+	/** How many owned passives are listed in the window. */
+	public static int shownOwnedCount() {
+		return Math.min(ownedDefs().size(), MAX_SKILL_LINES);
+	}
+
+	/** Name shown on the window (custom name, or the player's own name). */
+	public static String displayName() {
+		MinecraftClient mc = MinecraftClient.getInstance();
+		if (name.isEmpty() && mc.player != null) {
+			return mc.player.getName().getString();
+		}
+		return name;
+	}
+
+	/** The lines shown on the window, top to bottom. */
+	public static List<Text> lines() {
+		List<Text> l = new ArrayList<>();
+		l.add(Text.translatable("orvwindow.line.name", displayName()));
+		l.add(Text.translatable("orvwindow.line.race"));
+		l.add(Text.translatable("orvwindow.line.class"));
+		l.add(Text.translatable("orvwindow.line.level", LEVEL, EXP_PERCENT));
+		l.add(Text.translatable("orvwindow.line.unique")); // must stay at index UNIQUE_ROW
+
+		List<Passives.Def> have = ownedDefs();
 		if (have.isEmpty()) {
 			l.add(Text.translatable("orvwindow.line.skills_none"));
 		} else {
-			l.add(Text.translatable("orvwindow.line.skills"));
+			l.add(Text.translatable("orvwindow.line.skills")); // skill names start at UNIQUE_ROW + 2
 			int shownCount = Math.min(have.size(), MAX_SKILL_LINES);
 			for (int i = 0; i < shownCount; i++) {
 				l.add(Text.literal(have.get(i).name()));

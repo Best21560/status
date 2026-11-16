@@ -8,14 +8,18 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.PersistentState;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-/** Which passive skills each player owns. Saved with the world. */
+/** Passive skills and skill points of each player. Saved with the world. */
 public class SkillState extends PersistentState {
+	private static final int MAX_POINTS = 1_000_000;
+
 	private final Map<UUID, Set<String>> data = new HashMap<>();
+	private final Map<UUID, Integer> points = new HashMap<>();
 
 	public Set<String> skillsOf(UUID id) {
 		return data.getOrDefault(id, Set.of());
@@ -38,17 +42,33 @@ public class SkillState extends PersistentState {
 		return changed;
 	}
 
+	public int pointsOf(UUID id) {
+		return points.getOrDefault(id, 0);
+	}
+
+	public void setPoints(UUID id, int value) {
+		points.put(id, Math.max(0, Math.min(MAX_POINTS, value)));
+		markDirty();
+	}
+
+	public void addPoints(UUID id, int delta) {
+		setPoints(id, (int) Math.max(0L, Math.min((long) MAX_POINTS, (long) pointsOf(id) + delta)));
+	}
+
 	@Override
 	public NbtCompound writeNbt(NbtCompound nbt) {
+		Set<UUID> everyone = new HashSet<>(data.keySet());
+		everyone.addAll(points.keySet());
 		NbtList players = new NbtList();
-		for (Map.Entry<UUID, Set<String>> e : data.entrySet()) {
+		for (UUID id : everyone) {
 			NbtCompound p = new NbtCompound();
-			p.putString("uuid", e.getKey().toString());
+			p.putString("uuid", id.toString());
 			NbtList list = new NbtList();
-			for (String s : e.getValue()) {
+			for (String s : skillsOf(id)) {
 				list.add(NbtString.of(s));
 			}
 			p.put("skills", list);
+			p.putInt("points", pointsOf(id));
 			players.add(p);
 		}
 		nbt.put("players", players);
@@ -67,6 +87,7 @@ public class SkillState extends PersistentState {
 				set.add(list.getString(j));
 			}
 			st.data.put(id, set);
+			st.points.put(id, p.getInt("points"));
 		}
 		return st;
 	}
