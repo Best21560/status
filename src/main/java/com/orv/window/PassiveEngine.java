@@ -1,7 +1,9 @@
 package com.orv.window;
 
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
+import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -40,6 +42,8 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
+import net.minecraft.util.ActionResult;
+import net.minecraft.util.ActionResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
@@ -82,6 +86,15 @@ public final class PassiveEngine {
 	private static final double CAP_MAX_HP = 4.0;
 
 	private static boolean inReflect = false;
+	/** Slowness given when stamina hits 0: duration in ticks (100 = 5 s) and level (1 = Slowness II). */
+	private static final int EXHAUST_SLOW_TICKS = 100;
+	private static final int EXHAUST_SLOW_LEVEL = 1;
+	/** True while LivingEntityMixin re-calls damage() with a changed amount. */
+	public static boolean inDamage = false;
+
+	/** Set by the mixin while it repeats a damage / heal call with a changed amount. */
+	public static boolean inDamage = false;
+	public static boolean inHeal = false;
 
 	private PassiveEngine() {
 	}
@@ -92,6 +105,21 @@ public final class PassiveEngine {
 		ServerTickEvents.END_SERVER_TICK.register(PassiveEngine::serverTick);
 		ServerLivingEntityEvents.AFTER_DEATH.register(PassiveEngine::afterDeath);
 		PlayerBlockBreakEvents.AFTER.register(PassiveEngine::afterBlockBreak);
+		AttackEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
+			if (!world.isClient && player instanceof ServerPlayerEntity sp) {
+				beforeAttackReset(sp);
+			}
+			return ActionResult.PASS;
+		});
+		// remember how charged the weapon was right before the hit (the cooldown resets during the attack)
+		AttackEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
+			if (!world.isClient && player instanceof ServerPlayerEntity sp) {
+				PlayerRes r = res(sp.getUuid());
+				r.lastStrength = sp.getAttackCooldownProgress(0.5f);
+				r.lastStrengthTick = nowOf(sp);
+			}
+			return ActionResult.PASS;
+		});
 	}
 
 	public static PlayerRes res(UUID id) {
@@ -832,7 +860,7 @@ public final class PassiveEngine {
 		}
 
 		// ---- stamina
-		if (p.isCreative() || p.isSpectator()) {
+		if (p.isSpectator()) {
 			r.stamina = maxSta;
 			r.exhausted = false;
 		} else {
@@ -852,7 +880,11 @@ public final class PassiveEngine {
 			}
 			if (r.stamina <= 0f) {
 				r.stamina = 0f;
-				r.exhausted = true;
+				if (!r.exhausted) {
+					r.exhausted = true;
+					// out of stamina: Slowness II for 5 seconds
+					p.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, EXHAUST_SLOW_TICKS, EXHAUST_SLOW_LEVEL, false, true, true));
+				}
 			}
 			if (r.exhausted && r.stamina >= 20f) {
 				r.exhausted = false;

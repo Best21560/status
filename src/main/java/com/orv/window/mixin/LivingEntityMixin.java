@@ -7,25 +7,38 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-/** Hooks used by the passive skills (damage dealt/taken, healing, attack strength). */
+/** Hooks used by the passive skills. Only plain, standard injections are used on purpose. */
 @Mixin(LivingEntity.class)
 public abstract class LivingEntityMixin {
 
-	/** Dodge / deflect: cancel the hit completely. */
+	/**
+	 * Dodge / deflect (cancel the hit) and damage changes. The damage change is done by calling damage()
+	 * again with the new amount; PassiveEngine.inDamage stops the second call from being changed again.
+	 */
 	@Inject(method = "damage", at = @At("HEAD"), cancellable = true)
-	private void orv$negate(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
-		if (PassiveEngine.shouldNegate((LivingEntity) (Object) this, source)) {
-			cir.setReturnValue(false);
+	private void orv$onDamage(DamageSource source, float amount, CallbackInfoReturnable<Boolean> cir) {
+		if (PassiveEngine.inDamage) {
+			return;
 		}
-	}
-
-	/** Change the damage amount (attacker bonuses, defender reductions). */
-	@ModifyVariable(method = "damage", at = @At("HEAD"), argsOnly = true)
-	private float orv$modifyDamage(float amount, DamageSource source) {
-		return PassiveEngine.modifyDamage((LivingEntity) (Object) this, source, amount);
+		LivingEntity self = (LivingEntity) (Object) this;
+		if (self.getWorld().isClient) {
+			return;
+		}
+		if (PassiveEngine.shouldNegate(self, source)) {
+			cir.setReturnValue(false);
+			return;
+		}
+		float changed = PassiveEngine.modifyDamage(self, source, amount);
+		if (Math.abs(changed - amount) > 1.0E-4f) {
+			PassiveEngine.inDamage = true;
+			try {
+				cir.setReturnValue(self.damage(source, changed));
+			} finally {
+				PassiveEngine.inDamage = false;
+			}
+		}
 	}
 
 	/** After a hit landed: lifesteal, combo, procs, reflect... */
@@ -40,11 +53,5 @@ public abstract class LivingEntityMixin {
 	@ModifyVariable(method = "heal", at = @At("HEAD"), argsOnly = true)
 	private float orv$modifyHeal(float amount) {
 		return PassiveEngine.modifyHeal((LivingEntity) (Object) this, amount);
-	}
-
-	/** The attack cooldown is reset right before the hit; remember how charged it was. */
-	@Inject(method = "resetLastAttackedTicks", at = @At("HEAD"))
-	private void orv$beforeAttackReset(CallbackInfo ci) {
-		PassiveEngine.beforeAttackReset((LivingEntity) (Object) this);
 	}
 }

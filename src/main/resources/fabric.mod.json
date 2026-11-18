@@ -6,13 +6,10 @@
   "description": "Floating status window, passive skills, shop and player bars.",
   "environment": "*",
   "entrypoints": {
-    "main": [
-      "com.orv.window.OrvWindowMod"
-    ],
-    "client": [
-      "com.orv.window.OrvWindowClient"
-    ]
+    "main": ["com.orv.window.OrvWindowMod"],
+    "client": ["com.orv.window.OrvWindowClient"]
   },
+  "mixins": ["orvwindow.mixins.json"],
   "depends": {
     "fabricloader": ">=0.15.0",
     "minecraft": "~1.20.1",
