@@ -31,11 +31,22 @@ public class OrvWindowMod implements ModInitializer {
 	public static final Identifier BUY = new Identifier("orvwindow", "buy");
 	/** server -> client: the passives this player owns + skill points. */
 	public static final Identifier SKILLS = new Identifier("orvwindow", "skills");
+	/** server -> client: Mana, max Mana, Stamina, max Stamina, exhausted. */
+	public static final Identifier VITALS = new Identifier("orvwindow", "vitals");
+	/** client -> server: a key was pressed (0 = Blood Conversion, 1 = Mana Shield toggle). */
+	public static final Identifier ACTION = new Identifier("orvwindow", "action");
 
 	private static final Set<UUID> OPEN = ConcurrentHashMap.newKeySet();
 
 	@Override
 	public void onInitialize() {
+		PassiveEngine.init();
+
+		ServerPlayNetworking.registerGlobalReceiver(ACTION, (server, player, handler, buf, responseSender) -> {
+			int id = buf.readVarInt();
+			server.execute(() -> PassiveEngine.action(player, id));
+		});
+
 		ServerPlayNetworking.registerGlobalReceiver(STATE, (server, player, handler, buf, responseSender) -> {
 			boolean open = buf.readBoolean();
 			UUID id = player.getUuid();
@@ -96,6 +107,7 @@ public class OrvWindowMod implements ModInitializer {
 
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
 			UUID id = handler.player.getUuid();
+			PassiveEngine.clear(id);
 			if (OPEN.remove(id)) {
 				broadcast(server, id, false);
 			}
@@ -135,6 +147,7 @@ public class OrvWindowMod implements ModInitializer {
 
 	private static void sendSkills(ServerPlayerEntity player, SkillState st) {
 		Set<String> owned = st.skillsOf(player.getUuid());
+		PassiveEngine.setOwned(player.getUuid(), new java.util.HashSet<>(owned));
 		PacketByteBuf out = PacketByteBufs.create();
 		out.writeVarInt(owned.size());
 		for (String s : owned) {

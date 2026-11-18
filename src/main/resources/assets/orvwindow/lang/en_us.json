@@ -362,5 +362,13 @@
   "orvwindow.tooltip.effect": "ผล: %s",
   "orvwindow.tooltip.tier": "Tier %s · ราคา %s พ้อยต์",
   "orvwindow.cmd.points_added": "เพิ่มพ้อยต์สกิลให้ %s คน (%s)",
-  "orvwindow.cmd.points_set": "ตั้งพ้อยต์สกิลของ %s คนเป็น %s"
+  "orvwindow.cmd.points_set": "ตั้งพ้อยต์สกิลของ %s คนเป็น %s",
+  "key.orvwindow.blood_conversion": "Blood Conversion (HP → Mana)",
+  "key.orvwindow.mana_shield": "Mana Shield (เปิด/ปิด)",
+  "orvwindow.msg.blood_conversion_fail": "ใช้ Blood Conversion ไม่ได้ (คูลดาวน์ หรือ HP ต่ำเกินไป)",
+  "orvwindow.msg.manashield_on": "Mana Shield: เปิด",
+  "orvwindow.msg.manashield_off": "Mana Shield: ปิด",
+  "orvwindow.status.active": "ทำงานในเกมแล้ว",
+  "orvwindow.status.partial": "ทำงานบางส่วน",
+  "orvwindow.status.pending": "ยังไม่ทำงาน (รอระบบที่เกี่ยวข้อง)"
 }

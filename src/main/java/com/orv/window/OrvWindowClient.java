@@ -8,6 +8,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.minecraft.client.MinecraftClient;
@@ -37,6 +38,15 @@ public class OrvWindowClient implements ClientModInitializer {
 	public static volatile Set<String> mySkills = Set.of();
 	/** Skill points I can spend in the shop, synced from the server. */
 	public static volatile int myPoints = 0;
+	/** Mana / Stamina, synced from the server (HP comes from the player itself). */
+	public static volatile float mana = 100f;
+	public static volatile float maxMana = 100f;
+	public static volatile float stamina = 100f;
+	public static volatile float maxStamina = 100f;
+	public static volatile boolean exhausted = false;
+
+	public static KeyBinding bloodKey;
+	public static KeyBinding shieldKey;
 
 	@Override
 	public void onInitializeClient() {
@@ -49,12 +59,44 @@ public class OrvWindowClient implements ClientModInitializer {
 				"category.orvwindow"
 		));
 
+		bloodKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+				"key.orvwindow.blood_conversion", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_V, "category.orvwindow"));
+		shieldKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+				"key.orvwindow.mana_shield", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_G, "category.orvwindow"));
+
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			while (openKey.wasPressed()) {
 				if (client.player != null && client.currentScreen == null) {
 					openWindow(client);
 				}
 			}
+			while (bloodKey.wasPressed()) {
+				if (client.player != null && client.currentScreen == null) {
+					sendAction(0);
+				}
+			}
+			while (shieldKey.wasPressed()) {
+				if (client.player != null && client.currentScreen == null) {
+					sendAction(1);
+				}
+			}
+		});
+
+		HudRenderCallback.EVENT.register(VitalsHud::render);
+
+		ClientPlayNetworking.registerGlobalReceiver(OrvWindowMod.VITALS, (client, handler, buf, responseSender) -> {
+			float m = buf.readFloat();
+			float mm = buf.readFloat();
+			float st = buf.readFloat();
+			float ms = buf.readFloat();
+			boolean ex = buf.readBoolean();
+			client.execute(() -> {
+				mana = m;
+				maxMana = mm;
+				stamina = st;
+				maxStamina = ms;
+				exhausted = ex;
+			});
 		});
 
 		ClientPlayNetworking.registerGlobalReceiver(OrvWindowMod.STATE, (client, handler, buf, responseSender) -> {
@@ -102,6 +144,11 @@ public class OrvWindowClient implements ClientModInitializer {
 			OTHERS.clear();
 			mySkills = Set.of();
 			myPoints = 0;
+			mana = 100f;
+			maxMana = 100f;
+			stamina = 100f;
+			maxStamina = 100f;
+			exhausted = false;
 		});
 
 		// /status name <ชื่อ>
@@ -153,6 +200,14 @@ public class OrvWindowClient implements ClientModInitializer {
 			buf.writeString(skillId);
 			buf.writeBoolean(add);
 			ClientPlayNetworking.send(OrvWindowMod.GRANT, buf);
+		}
+	}
+
+	public static void sendAction(int id) {
+		if (ClientPlayNetworking.canSend(OrvWindowMod.ACTION)) {
+			PacketByteBuf buf = PacketByteBufs.create();
+			buf.writeVarInt(id);
+			ClientPlayNetworking.send(OrvWindowMod.ACTION, buf);
 		}
 	}
 

@@ -190,6 +190,20 @@ public final class Passives {
 			new Def("perfectionist", "Perfectionist", "growth", 3)
 	);
 
+	/** Passives that work in the game now (see PassiveEngine). */
+	private static final java.util.Set<String> ACTIVE = java.util.Set.of("power_strike", "critical_instinct", "fatal_blow", "armor_breaker", "executioner", "backstabber", "combo_master", "first_blood", "piercing_force", "berserker", "bloodlust", "unstoppable", "predator", "ruthless", "sniper_instinct", "adrenaline_rush", "iron_body", "magic_barrier", "thick_skin", "last_stand", "second_chance", "regeneration", "toughness", "fortress", "evasive_instinct", "deflection", "tenacity", "unyielding", "elemental_resistance", "death_ward", "guardian_spirit", "pain_suppression", "steadfast", "reflective_armor", "adaptation", "swift_feet", "fleet_footed", "lightweight", "shadow_walker", "momentum", "hunters_pursuit", "escape_artist", "swift_recovery", "burning_blood", "ashen_skin", "toxic_touch", "wind_soul", "earth_heart", "natures_blessing", "holy_light", "dark_embrace", "corrosion", "void_resonance", "mana_flow", "mana_pool", "energy_absorption", "stamina_mastery", "second_wind", "overcharge", "arcane_recovery", "battle_focus", "blood_conversion", "mana_shield", "vampirism", "blood_harvest", "soul_drain", "rejuvenation", "desperate_recovery", "life_bond", "overheal", "blood_pact", "natural_healing", "purification", "vitality_surge", "monster_hunter", "beast_slayer", "ambusher", "marked_prey", "killing_rhythm", "night_predator", "lucky_finder", "forager", "resourceful", "survivor", "cold_resistance", "deep_diver");
+
+	/** Passives that work only in part (some of their effect is still missing). */
+	private static final java.util.Set<String> PARTIAL = java.util.Set.of("heavy_impact", "weapon_mastery", "dual_wielder", "gravity_defier", "soul_collector");
+
+	/** 2 = works, 1 = works in part, 0 = not working yet (needs a system that does not exist yet). */
+	public static int status(String id) {
+		if (ACTIVE.contains(id)) {
+			return 2;
+		}
+		return PARTIAL.contains(id) ? 1 : 0;
+	}
+
 	public static boolean exists(String id) {
 		return get(id) != null;
 	}
@@ -211,8 +225,20 @@ public final class Passives {
 				Text.translatable("orvwindow.passive." + d.id()),
 				Text.translatable("orvwindow.tooltip.effect", Text.translatable("orvwindow.effect." + d.id())).formatted(Formatting.YELLOW),
 				Text.translatable("orvwindow.tooltip.tier", roman[Math.max(1, Math.min(4, d.tier())) - 1], d.cost()).formatted(Formatting.GRAY),
+				statusLine(d),
 				Text.translatable("orvwindow.cat." + d.category()).formatted(Formatting.DARK_GRAY)
 		);
+	}
+
+	private static Text statusLine(Def d) {
+		int st = status(d.id());
+		if (st == 2) {
+			return Text.translatable("orvwindow.status.active").formatted(Formatting.GREEN);
+		}
+		if (st == 1) {
+			return Text.translatable("orvwindow.status.partial").formatted(Formatting.GOLD);
+		}
+		return Text.translatable("orvwindow.status.pending").formatted(Formatting.RED);
 	}
 
 	private Passives() {
