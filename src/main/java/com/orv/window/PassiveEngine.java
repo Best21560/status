@@ -89,9 +89,6 @@ public final class PassiveEngine {
 	/** Slowness given when stamina hits 0: duration in ticks (100 = 5 s) and level (1 = Slowness II). */
 	private static final int EXHAUST_SLOW_TICKS = 100;
 	private static final int EXHAUST_SLOW_LEVEL = 1;
-	/** True while LivingEntityMixin re-calls damage() with a changed amount. */
-	public static boolean inDamage = false;
-
 	/** Set by the mixin while it repeats a damage / heal call with a changed amount. */
 	public static boolean inDamage = false;
 	public static boolean inHeal = false;
