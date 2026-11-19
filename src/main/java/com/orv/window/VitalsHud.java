@@ -4,24 +4,52 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.Identifier;
 
-/** Player bar at the top-left of the screen, Dark Souls style: face, HP (with damage trail), Mana, Stamina. */
+/**
+ * Player bar at the top-left, Dark Souls style: bronze-rimmed portrait, long thin bars whose length grows with
+ * the maximum, and a pale "damage trail" that drains after a short delay.
+ */
 public final class VitalsHud {
-	// frame colours
-	private static final int FRAME_OUTER = 0xFF050505;
-	private static final int FRAME_GOLD = 0xFF6A5B3D;
-	private static final int FRAME_GOLD_LIGHT = 0xFF9B8860;
-	private static final int BAR_BACK = 0xFF110B0B;
-	private static final int TEXT = 0xFFC9BEA4;
+	private static final int OUTER = 0xFF050505;
+	private static final int BRONZE = 0xFF7A6A44;
+	private static final int BRONZE_HI = 0xFFB59A5C;
+	private static final int BG = 0xFF120E0C;
+	private static final int TEXT = 0xFFB8AE96;
+	private static final int ALERT = 0xFFB03A2A;
 
-	// HP damage trail (the pale part that slowly shrinks after you get hurt)
-	private static float trailHp = -1f;
-	private static float lastHp = -1f;
-	private static long trailHoldUntil = 0L;
-	private static long lastFrameNs = 0L;
+	private static final Trail HP = new Trail();
+	private static final Trail MP = new Trail();
 
 	private VitalsHud() {
+	}
+
+	/** Remembers the "lost" part of a bar so it can drain slowly after a delay. */
+	private static final class Trail {
+		float trail = -1f;
+		float last = -1f;
+		long changedAt = 0;
+		long lastFrame = 0;
+
+		float update(float cur, float max, long now) {
+			float dt = lastFrame == 0 ? 0f : Math.min(0.1f, (now - lastFrame) / 1000f);
+			lastFrame = now;
+			if (trail < 0f) {
+				trail = cur;
+				last = cur;
+			}
+			if (cur < last - 0.01f) {
+				changedAt = now;
+			}
+			last = cur;
+			if (cur >= trail) {
+				trail = cur;
+			} else if (now - changedAt > 500) {
+				trail = Math.max(cur, trail - Math.max(1f, max) * 0.6f * dt);
+			}
+			return trail;
+		}
 	}
 
 	public static void render(DrawContext ctx, float tickDelta) {
@@ -30,132 +58,120 @@ public final class VitalsHud {
 			return;
 		}
 		TextRenderer tr = mc.textRenderer;
-		long nowMs = System.currentTimeMillis();
-		long nowNs = System.nanoTime();
-		float dt = lastFrameNs == 0L ? 0f : Math.min(0.1f, (nowNs - lastFrameNs) / 1_000_000_000f);
-		lastFrameNs = nowNs;
+		long now = System.currentTimeMillis();
 
+		int px = 8;
+		int py = 8;
+		int ps = 40;
+		portrait(ctx, mc, px, py, ps);
+
+		int bx = px + ps + 11;
+
+		// ---- HP
 		float hp = mc.player.getHealth();
 		float maxHp = Math.max(1f, mc.player.getMaxHealth());
 		float abs = mc.player.getAbsorptionAmount();
-
-		// trail logic
-		if (trailHp < 0f) {
-			trailHp = hp;
-			lastHp = hp;
-		}
-		if (hp < lastHp - 0.01f) {
-			trailHoldUntil = nowMs + 450;
-		}
-		lastHp = hp;
-		if (hp >= trailHp) {
-			trailHp = hp;
-		} else if (nowMs > trailHoldUntil) {
-			trailHp = Math.max(hp, trailHp - maxHp * 0.5f * dt);
-		}
-
-		// ---- face
-		int x = 8;
-		int y = 8;
-		int size = 36;
-		ctx.fill(x, y, x + size, y + size, FRAME_OUTER);
-		ctx.fill(x + 1, y + 1, x + size - 1, y + size - 1, FRAME_GOLD);
-		ctx.fill(x + 2, y + 2, x + size - 2, y + size - 2, FRAME_OUTER);
-		Identifier skin = mc.player.getSkinTexture();
-		RenderSystem.enableBlend();
-		ctx.drawTexture(skin, x + 3, y + 3, size - 6, size - 6, 8f, 8f, 8, 8, 64, 64);
-		ctx.drawTexture(skin, x + 3, y + 3, size - 6, size - 6, 40f, 8f, 8, 8, 64, 64);
-		RenderSystem.disableBlend();
-		ctx.fill(x + 3, y + 3, x + size - 3, y + size - 3, 0x30000000); // slight dimming
-		// little corner studs
-		ctx.fill(x - 1, y - 1, x + 3, y + 1, FRAME_GOLD_LIGHT);
-		ctx.fill(x - 1, y - 1, x + 1, y + 3, FRAME_GOLD_LIGHT);
-		ctx.fill(x + size - 3, y + size - 1, x + size + 1, y + size + 1, FRAME_GOLD_LIGHT);
-		ctx.fill(x + size - 1, y + size - 3, x + size + 1, y + size + 1, FRAME_GOLD_LIGHT);
-
-		int bx = x + size + 8;
-
-		// ---- HP bar (longer when Max HP is higher)
-		int hpW = clamp(90 + Math.round(maxHp * 3f), 120, 240);
-		float hpFrac = clamp01(hp / maxHp);
-		float pulse = hpFrac <= 0.30f ? 0.5f + 0.5f * (float) Math.sin(nowMs / 140.0) : 0f;
-		int hpTop = mix(0xFFC23B2E, 0xFFFF6A55, pulse);
-		int hpBot = mix(0xFF8A1E19, 0xFFB5302A, pulse);
-		bar(ctx, bx, y + 1, hpW, 11, hpFrac, clamp01(trailHp / maxHp), hpTop, hpBot, 0xFFE0B040);
+		boolean low = hp / maxHp <= 0.30f;
+		int hpW = clamp(Math.round(70 + maxHp * 4.5f), 110, 230);
+		int hpY = py + 3;
+		int hpH = 10;
+		int hpRim = (low && (now / 400) % 2 == 0) ? ALERT : BRONZE;
+		bar(ctx, bx, hpY, hpW, hpH, hp / maxHp, HP.update(hp, maxHp, now) / maxHp,
+				0xFFC8342A, 0xFF8C1A14, 0xFFD9B44A, hpRim);
 		if (abs > 0.5f) {
-			// absorption: a thin gold line under the HP bar
-			int aw = Math.round(hpW * clamp01(abs / maxHp));
-			ctx.fill(bx, y + 13, bx + aw, y + 14, 0xFFE8C65A);
+			int aw = Math.min(hpW, Math.round(hpW * abs / maxHp));
+			ctx.fill(bx, hpY + hpH - 2, bx + aw, hpY + hpH, 0xFFE0C060);
 		}
-		small(ctx, tr, (int) Math.ceil(hp) + "/" + (int) Math.ceil(maxHp), bx + hpW + 6, y + 3);
+		number(ctx, tr, (int) Math.ceil(hp) + (abs > 0.5f ? "+" + (int) Math.ceil(abs) : "") + "/" + (int) Math.ceil(maxHp),
+				bx + hpW + 7, hpY + 2);
 
-		// ---- Mana bar
+		// ---- Mana
 		float mana = OrvWindowClient.mana;
 		float maxMana = Math.max(1f, OrvWindowClient.maxMana);
-		int mpW = clamp(50 + Math.round(maxMana * 0.8f), 90, 200);
-		bar(ctx, bx, y + 17, mpW, 8, clamp01(mana / maxMana), -1f, 0xFF4F89D9, 0xFF2A4F96, 0);
-		small(ctx, tr, (int) Math.ceil(mana) + "/" + (int) Math.ceil(maxMana), bx + mpW + 6, y + 17);
+		int mpW = clamp(Math.round(60 + maxMana * 0.7f), 90, 200);
+		int mpY = hpY + hpH + 6;
+		int mpH = 6;
+		bar(ctx, bx, mpY, mpW, mpH, mana / maxMana, MP.update(mana, maxMana, now) / maxMana,
+				0xFF4A7FD6, 0xFF2A4C94, 0xFF9DB8E8, BRONZE);
+		number(ctx, tr, (int) Math.ceil(mana) + "/" + (int) Math.ceil(maxMana), bx + mpW + 7, mpY);
 
-		// ---- Stamina bar (flashes when exhausted)
+		// ---- Stamina
 		float sta = OrvWindowClient.stamina;
 		float maxSta = Math.max(1f, OrvWindowClient.maxStamina);
-		int spW = clamp(50 + Math.round(maxSta * 0.8f), 90, 200);
 		boolean ex = OrvWindowClient.exhausted;
-		int spTop = 0xFF86C650;
-		int spBot = 0xFF4B7B2C;
-		if (ex) {
-			boolean blink = (nowMs / 200) % 2 == 0;
-			spTop = blink ? 0xFFB5442F : 0xFF6B2A1F;
-			spBot = blink ? 0xFF7A2A1D : 0xFF3F1810;
-		}
-		bar(ctx, bx, y + 28, spW, 9, clamp01(sta / maxSta), -1f, spTop, spBot, 0);
-		small(ctx, tr, (int) Math.ceil(sta) + "/" + (int) Math.ceil(maxSta), bx + spW + 6, y + 29);
+		int spW = clamp(Math.round(60 + maxSta * 0.9f), 90, 220);
+		int spY = mpY + mpH + 6;
+		int spH = 8;
+		int spRim = (ex && (now / 150) % 2 == 0) ? ALERT : BRONZE;
+		bar(ctx, bx, spY, spW, spH, sta / maxSta, sta / maxSta,
+				ex ? 0xFF9A7F3A : 0xFF6FBF4A, ex ? 0xFF6A5526 : 0xFF3F7F2C, 0xFF000000, spRim);
+		number(ctx, tr, (int) Math.ceil(sta) + "/" + (int) Math.ceil(maxSta), bx + spW + 7, spY + 1);
 	}
 
-	/** One bar: dark double frame, dark back, optional pale trail, two-tone fill with a highlight line. */
-	private static void bar(DrawContext ctx, int x, int y, int w, int h, float frac, float trailFrac,
-							int topColor, int botColor, int trailColor) {
-		ctx.fill(x - 2, y - 2, x + w + 2, y + h + 2, FRAME_OUTER);
-		ctx.fill(x - 1, y - 1, x + w + 1, y + h + 1, FRAME_GOLD);
-		ctx.fill(x, y, x + w, y + h, BAR_BACK);
-		if (trailFrac > frac) {
-			ctx.fill(x, y, x + Math.round(w * trailFrac), y + h, trailColor);
-		}
-		int fw = Math.round(w * frac);
-		if (fw > 0) {
-			int half = Math.max(1, h / 2);
-			ctx.fill(x, y, x + fw, y + half, topColor);
-			ctx.fill(x, y + half, x + fw, y + h, botColor);
-			ctx.fill(x, y, x + fw, y + 1, 0x38FFFFFF); // top highlight
-			ctx.fill(x + fw - 1, y, x + fw, y + h, 0x50000000); // dark edge at the end of the fill
-		}
-		// ornament: small gold ticks at both ends
-		ctx.fill(x - 3, y + h / 2 - 1, x - 2, y + h / 2 + 2, FRAME_GOLD_LIGHT);
-		ctx.fill(x + w + 2, y + h / 2 - 1, x + w + 3, y + h / 2 + 2, FRAME_GOLD_LIGHT);
-	}
-
-	private static void small(DrawContext ctx, TextRenderer tr, String text, int x, int y) {
-		ctx.getMatrices().push();
-		ctx.getMatrices().translate(x, y, 0);
-		ctx.getMatrices().scale(0.75f, 0.75f, 1f);
-		ctx.drawTextWithShadow(tr, text, 0, 0, TEXT);
-		ctx.getMatrices().pop();
+	private static int clamp(int v, int lo, int hi) {
+		return Math.max(lo, Math.min(hi, v));
 	}
 
 	private static float clamp01(float v) {
 		return v < 0f ? 0f : (v > 1f ? 1f : v);
 	}
 
-	private static int clamp(int v, int lo, int hi) {
-		return v < lo ? lo : (v > hi ? hi : v);
+	private static void portrait(DrawContext ctx, MinecraftClient mc, int x, int y, int s) {
+		ctx.fill(x - 4, y - 4, x + s + 4, y + s + 4, OUTER);
+		ctx.fill(x - 3, y - 3, x + s + 3, y + s + 3, BRONZE);
+		ctx.fill(x - 2, y - 2, x + s + 2, y + s + 2, 0xFF1A1512);
+		ctx.fill(x - 1, y - 1, x + s + 1, y + s + 1, OUTER);
+
+		Identifier skin = mc.player.getSkinTexture();
+		RenderSystem.enableBlend();
+		ctx.drawTexture(skin, x, y, s, s, 8f, 8f, 8, 8, 64, 64);
+		ctx.drawTexture(skin, x, y, s, s, 40f, 8f, 8, 8, 64, 64);
+		RenderSystem.disableBlend();
+
+		// vignette
+		int v = 9;
+		ctx.fillGradient(x, y, x + s, y + v, 0x90000000, 0x00000000);
+		ctx.fillGradient(x, y + s - v, x + s, y + s, 0x00000000, 0x90000000);
+
+		// corner studs
+		stud(ctx, x - 4, y - 4);
+		stud(ctx, x + s + 3, y - 4);
+		stud(ctx, x - 4, y + s + 3);
+		stud(ctx, x + s + 3, y + s + 3);
 	}
 
-	private static int mix(int a, int b, float t) {
-		int ar = (a >> 16) & 255, ag = (a >> 8) & 255, ab = a & 255;
-		int br = (b >> 16) & 255, bg = (b >> 8) & 255, bb = b & 255;
-		int r = Math.round(ar + (br - ar) * t);
-		int g = Math.round(ag + (bg - ag) * t);
-		int bl = Math.round(ab + (bb - ab) * t);
-		return 0xFF000000 | (r << 16) | (g << 8) | bl;
+	private static void stud(DrawContext ctx, int cx, int cy) {
+		ctx.fill(cx - 1, cy - 1, cx + 2, cy + 2, BRONZE_HI);
+	}
+
+	private static void bar(DrawContext ctx, int x, int y, int w, int h, float frac, float trailFrac,
+							int top, int bottom, int trailColor, int rim) {
+		ctx.fill(x - 2, y - 2, x + w + 2, y + h + 2, OUTER);
+		ctx.fill(x - 1, y - 1, x + w + 1, y + h + 1, rim);
+		ctx.fill(x, y, x + w, y + h, BG);
+
+		int fw = Math.round(w * clamp01(frac));
+		int tw = Math.round(w * clamp01(trailFrac));
+		if (tw > fw) {
+			ctx.fill(x + fw, y, x + tw, y + h, trailColor);
+		}
+		if (fw > 0) {
+			ctx.fillGradient(x, y, x + fw, y + h, top, bottom);
+			ctx.fill(x, y, x + fw, y + 1, 0x30FFFFFF);
+		}
+
+		// little notches on both ends
+		int my = y + h / 2;
+		ctx.fill(x - 4, my - 1, x - 1, my + 1, rim);
+		ctx.fill(x + w + 1, my - 1, x + w + 4, my + 1, rim);
+	}
+
+	private static void number(DrawContext ctx, TextRenderer tr, String s, int x, int y) {
+		MatrixStack m = ctx.getMatrices();
+		m.push();
+		m.translate(x, y, 0);
+		m.scale(0.75f, 0.75f, 1f);
+		ctx.drawTextWithShadow(tr, s, 0, 0, TEXT);
+		m.pop();
 	}
 }
