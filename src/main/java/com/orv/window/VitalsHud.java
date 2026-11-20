@@ -18,6 +18,9 @@ public final class VitalsHud {
 	private static final int METAL_DARK = 0xFF1C1710;
 	private static final int NUMBER = 0xFFB9A57A;
 
+	/** All three bars (HP, Mana, Stamina) share this length. */
+	public static final int BAR_LEN = 130;
+
 	// HP trail
 	private static float trailHp = -1f;
 	private static float lastHp = -1f;
@@ -49,7 +52,7 @@ public final class VitalsHud {
 		boolean lowHp = hp / maxHp <= 0.30f;
 
 		// soft drop shadow behind everything
-		ctx.fillGradient(3, 3, 6 + 36 + 8 + 190, 6 + 36 + 4, 0x30000000, 0x00000000);
+		ctx.fillGradient(3, 3, 6 + 36 + 8 + BAR_LEN + 40, 6 + 36 + 4, 0x30000000, 0x00000000);
 
 		// ---- portrait
 		int fx = 7;
@@ -86,7 +89,7 @@ public final class VitalsHud {
 		int y1 = fy + 2;
 
 		// HP
-		int hpLen = clamp(50 + Math.round(maxHp * 2.5f), 70, 170);
+		int hpLen = BAR_LEN;
 		bar(ctx, bx, y1, hpLen, hp / maxHp, trailHp / maxHp, 0xFFC02A22, 0xFF6C100D, 0xFFD9B45C);
 		if (abs > 0.5f) {
 			int aw = Math.min(hpLen, Math.round(hpLen * Math.min(1f, abs / maxHp)));
@@ -96,13 +99,13 @@ public final class VitalsHud {
 
 		// Mana
 		int y2 = y1 + 11;
-		int manaLen = clamp(30 + Math.round(maxMana * 0.8f), 60, 150);
+		int manaLen = BAR_LEN;
 		bar(ctx, bx, y2, manaLen, mana / maxMana, mana / maxMana, 0xFF4A80E0, 0xFF1C3A8A, 0);
 		numbers(ctx, tr, bx + manaLen + 5, y2 - 1, (int) Math.ceil(mana) + "/" + (int) Math.ceil(maxMana));
 
 		// Stamina (dull red pulse when it ran out)
 		int y3 = y2 + 11;
-		int staLen = clamp(30 + Math.round(maxSta * 0.9f), 60, 160);
+		int staLen = BAR_LEN;
 		int top = 0xFF62B858;
 		int bottom = 0xFF2A6A2D;
 		if (exhausted) {
@@ -112,6 +115,53 @@ public final class VitalsHud {
 		}
 		bar(ctx, bx, y3, staLen, sta / maxSta, sta / maxSta, top, bottom, 0);
 		numbers(ctx, tr, bx + staLen + 5, y3 - 1, (int) Math.ceil(sta) + "/" + (int) Math.ceil(maxSta));
+
+		renderTarget(ctx, mc, tr);
+	}
+
+	// ------------------------------------------------------------------ enemy plate (name + HP of what you look at)
+
+	/** Shows the name and HP of the creature you look at: 16 blocks, +16 with Keen Eyes. */
+	private static void renderTarget(DrawContext ctx, MinecraftClient mc, TextRenderer tr) {
+		if (mc.world == null || mc.player == null) {
+			return;
+		}
+		double range = OrvWindowClient.mySkills.contains("keen_eyes") ? 32.0 : 16.0;
+		net.minecraft.util.math.Vec3d eye = mc.player.getEyePos();
+		net.minecraft.util.math.Vec3d look = mc.player.getRotationVec(1f);
+		net.minecraft.entity.LivingEntity best = null;
+		double bestDot = 0.9975; // about 4 degrees
+		for (net.minecraft.entity.Entity e : mc.world.getEntities()) {
+			if (!(e instanceof net.minecraft.entity.LivingEntity le) || e == mc.player || !le.isAlive() || le.isInvisible()) {
+				continue;
+			}
+			net.minecraft.util.math.Vec3d to = le.getPos().add(0, le.getHeight() * 0.5, 0).subtract(eye);
+			double dist = to.length();
+			if (dist > range || dist < 0.5) {
+				continue;
+			}
+			double dot = to.normalize().dotProduct(look);
+			if (dot > bestDot && mc.player.canSee(le)) {
+				bestDot = dot;
+				best = le;
+			}
+		}
+		if (best == null) {
+			return;
+		}
+		int w = mc.getWindow().getScaledWidth();
+		int len = 110;
+		int x = (w - len) / 2;
+		int y = 18;
+		String name = best.getDisplayName().getString();
+		int nw = tr.getWidth(name);
+		ctx.drawTextWithShadow(tr, name, (w - nw) / 2, y - 11, 0xFFD9C79A);
+		float hp = best.getHealth();
+		float max = Math.max(1f, best.getMaxHealth());
+		bar(ctx, x, y, len, hp / max, hp / max, 0xFFC02A22, 0xFF6C100D, 0);
+		String txt = (int) Math.ceil(hp) + "/" + (int) Math.ceil(max);
+		int tw = (int) (tr.getWidth(txt) * 0.65f);
+		numbers(ctx, tr, (w - tw) / 2, y + 9, txt);
 	}
 
 	private static int clamp(int v, int lo, int hi) {

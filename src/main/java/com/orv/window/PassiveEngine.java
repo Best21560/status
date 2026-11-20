@@ -33,6 +33,8 @@ import net.minecraft.entity.mob.Monster;
 import net.minecraft.entity.player.HungerManager;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.projectile.PersistentProjectileEntity;
+import net.minecraft.entity.projectile.ExplosiveProjectileEntity;
+import net.minecraft.entity.projectile.ShulkerBulletEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.AxeItem;
 import net.minecraft.item.SwordItem;
@@ -162,27 +164,29 @@ public final class PassiveEngine {
 			}
 			r.shieldOn = !r.shieldOn;
 			p.sendMessage(Text.translatable(r.shieldOn ? "orvwindow.msg.manashield_on" : "orvwindow.msg.manashield_off"), true);
+		} else {
+			Extras.action(p, r, id, now);
 		}
 	}
 
-	private static boolean has(PlayerRes r, String id) {
+	static boolean has(PlayerRes r, String id) {
 		return r.owned.contains(id);
 	}
 
-	private static long nowOf(Entity e) {
+	static long nowOf(Entity e) {
 		MinecraftServer s = e.getServer();
 		return s == null ? 0L : s.getTicks();
 	}
 
-	private static boolean isBoss(LivingEntity e) {
+	static boolean isBoss(LivingEntity e) {
 		return e.getMaxHealth() >= 100f;
 	}
 
-	private static float maxMana(PlayerRes r) {
+	static float maxMana(PlayerRes r) {
 		return 100f + (has(r, "mana_pool") ? 20f : 0f);
 	}
 
-	private static float maxStamina(PlayerRes r) {
+	static float maxStamina(PlayerRes r) {
 		return 100f + (has(r, "stamina_mastery") ? 20f : 0f);
 	}
 
@@ -204,10 +208,21 @@ public final class PassiveEngine {
 			return false;
 		}
 		PlayerRes r = res(p.getUuid());
+		long nowI = nowOf(p);
+		if (nowI < r.iframeUntil && !source.isIn(DamageTypeTags.BYPASSES_INVULNERABILITY)) {
+			return true; // dash / roll invulnerability
+		}
 		if (r.owned.isEmpty()) {
 			return false;
 		}
-		long now = nowOf(p);
+		long now = nowI;
+		boolean magicHit = source.isOf(DamageTypes.MAGIC) || source.isOf(DamageTypes.INDIRECT_MAGIC)
+				|| source.getSource() instanceof ExplosiveProjectileEntity || source.getSource() instanceof ShulkerBulletEntity;
+		if (magicHit && has(r, "spell_absorption") && now >= r.absorbIcd && RAND.nextFloat() < 0.15f) {
+			r.absorbIcd = now + 80;
+			r.mana = Math.min(maxMana(r), r.mana + 10f);
+			return true;
+		}
 		boolean projectile = source.isIn(DamageTypeTags.IS_PROJECTILE);
 		boolean attackHit = source.getAttacker() != null && (source.getSource() == source.getAttacker() || projectile);
 		if (projectile && has(r, "deflection") && now >= r.deflectIcd && RAND.nextFloat() < 0.15f) {
@@ -233,10 +248,23 @@ public final class PassiveEngine {
 		if (a instanceof ServerPlayerEntity atk) {
 			out = attackerBonus(atk, victim, source, out, now);
 		}
+		if (a == null && !(victim instanceof PlayerEntity) && isTrapDamage(source)) {
+			PlayerEntity near = victim.getWorld().getClosestPlayer(victim, 16.0);
+			if (near instanceof ServerPlayerEntity np && has(res(np.getUuid()), "trap_expert")) {
+				out *= 1.15f;
+			}
+		}
 		if (victim instanceof ServerPlayerEntity vp) {
 			out = defenderReduction(vp, source, out, now);
 		}
 		return out;
+	}
+
+	private static boolean isTrapDamage(DamageSource s) {
+		return s.isOf(DamageTypes.CACTUS) || s.isOf(DamageTypes.HOT_FLOOR) || s.isOf(DamageTypes.SWEET_BERRY_BUSH)
+				|| s.isOf(DamageTypes.FALLING_STALACTITE) || s.isOf(DamageTypes.STALAGMITE) || s.isOf(DamageTypes.LAVA)
+				|| s.isOf(DamageTypes.IN_FIRE) || s.isOf(DamageTypes.FALL) || s.isOf(DamageTypes.FALLING_ANVIL)
+				|| s.isOf(DamageTypes.FALLING_BLOCK) || s.isOf(DamageTypes.ARROW);
 	}
 
 	private static float attackerBonus(ServerPlayerEntity atk, LivingEntity victim, DamageSource source, float amount, long now) {
@@ -359,6 +387,29 @@ public final class PassiveEngine {
 			r.overchargeReady = false;
 			r.overchargeIcd = now + 200;
 		}
+		if (has(r, "absolute_zero") && victim.isFrozen()) {
+			bonus += 0.10f;
+		}
+		if (has(r, "weak_point_detection") && victim.getUuid().equals(r.weakTarget) && now < r.weakUntil) {
+			bonus += 0.20f;
+			r.weakTarget = null;
+			r.weakIcd = now + 100;
+		}
+		String elOut = elementOf(source);
+		if (elOut != null && !Spells.inSpell) {
+			if ("fire".equals(elOut) && has(r, "inferno_soul")) {
+				bonus += 0.12f;
+			}
+			if ("freeze".equals(elOut) && has(r, "frozen_heart")) {
+				bonus += 0.12f;
+			}
+			if ("lightning".equals(elOut) && has(r, "thunder_core")) {
+				bonus += 0.12f;
+			}
+			if (has(r, "elemental_harmony") && now < r.harmonyUntil) {
+				bonus += 0.15f;
+			}
+		}
 		out *= 1f + Math.min(CAP_DAMAGE_BONUS, bonus);
 
 		// ignore part of the armor
@@ -401,6 +452,22 @@ public final class PassiveEngine {
 		PlayerRes r = res(vp.getUuid());
 		if (r.owned.isEmpty()) {
 			return amount;
+		}
+		if (has(r, "counter_attack") && vp.isBlocking() && now >= r.counterIcd && !inReflect
+				&& source.getAttacker() instanceof LivingEntity att && source.getSource() == att
+				&& !source.isIn(DamageTypeTags.BYPASSES_SHIELD)) {
+			Vec3d to = att.getPos().subtract(vp.getPos());
+			Vec3d look = vp.getRotationVec(1f);
+			if (look.x * to.x + look.z * to.z > 0 && RAND.nextFloat() < 0.25f) {
+				r.counterIcd = now + 60;
+				float wd = (float) vp.getAttributeValue(EntityAttributes.GENERIC_ATTACK_DAMAGE) * 0.6f;
+				inReflect = true;
+				try {
+					att.damage(vp.getDamageSources().playerAttack(vp), wd);
+				} finally {
+					inReflect = false;
+				}
+			}
 		}
 		float hpFrac = vp.getHealth() / Math.max(1f, vp.getMaxHealth());
 		boolean fall = source.isIn(DamageTypeTags.IS_FALL);
@@ -495,6 +562,10 @@ public final class PassiveEngine {
 			PlayerRes r = res(vp.getUuid());
 			r.lastDamagedTick = now;
 			r.moveTicks = 0;
+			if (has(r, "quick_reflex") && now >= r.reflexIcd) {
+				r.reflexUntil = now + 60;
+				r.reflexIcd = now + 100;
+			}
 			if (has(r, "pain_suppression") && amount >= 4f && now >= r.painIcd) {
 				r.painUntil = now + 60;
 				r.painIcd = now + 160;
@@ -534,11 +605,58 @@ public final class PassiveEngine {
 
 		if (a instanceof ServerPlayerEntity atk) {
 			PlayerRes r = res(atk.getUuid());
-			if (r.owned.isEmpty()) {
+			if (r.owned.isEmpty() || inReflect) {
 				return;
 			}
 			boolean melee = source.getSource() == atk;
+			String ael = elementOf(source);
+			if (ael != null && !Spells.inSpell) {
+				Spells.noteElement(r, ael, now);
+				if ("lightning".equals(ael)) {
+					Spells.chain(atk, r, victim, amount, now);
+				}
+			}
+			if (has(r, "blood_tracker") && !(victim instanceof PlayerEntity) && victim.getHealth() < 0.7f * victim.getMaxHealth()) {
+				r.bleeders.computeIfAbsent(victim.getUuid(), k -> new PlayerRes.Blood()).until = now + 400;
+			}
 			if (melee) {
+				float st = (now - r.lastStrengthTick <= 1) ? r.lastStrength : 1f;
+				float kbExtra = 0f;
+				if (has(r, "heavy_impact") && st >= 0.9f) {
+					kbExtra += 0.10f;
+				}
+				if (has(r, "gale_force")) {
+					kbExtra += 0.08f;
+				}
+				if (kbExtra > 0f && victim.isAlive()) {
+					double yaw = atk.getYaw() * 0.017453292;
+					victim.takeKnockback(kbExtra, Math.sin(yaw), -Math.cos(yaw));
+				}
+				if (has(r, "weapon_mastery") && RAND.nextFloat() < 0.15f) {
+					ItemStack held = atk.getMainHandStack();
+					if (held.isDamageable()) {
+						r.refundStack = held;
+						r.refundTo = held.getDamage();
+					}
+				}
+				if (has(r, "dual_wielder") && isWeapon(atk.getMainHandStack()) && isWeapon(atk.getOffHandStack())
+						&& now >= r.dualIcd && victim.isAlive() && RAND.nextFloat() < 0.20f) {
+					r.dualIcd = now + 10;
+					victim.timeUntilRegen = 0;
+					inReflect = true;
+					try {
+						victim.damage(atk.getDamageSources().playerAttack(atk), 0.4f * amount);
+					} finally {
+						inReflect = false;
+					}
+				}
+				if (has(r, "static_charge")) {
+					r.charge++;
+					if (r.charge >= 10) {
+						r.charge = 0;
+						Spells.discharge(atk, r, now);
+					}
+				}
 				if (now - r.lastHitTick <= 40) {
 					r.combo++;
 				} else {
@@ -551,10 +669,13 @@ public final class PassiveEngine {
 					r.adrenalineIcd = now + 300;
 				}
 				if (has(r, "burning_blood") && RAND.nextFloat() < 0.15f) {
-					victim.setOnFireFor(3);
+					victim.setOnFireFor(3 + (has(r, "inferno_soul") ? 1 : 0));
+					Spells.noteElement(r, "fire", now);
 				}
 				if (has(r, "toxic_touch") && RAND.nextFloat() < 0.15f) {
-					victim.addStatusEffect(new StatusEffectInstance(StatusEffects.POISON, 80, 0), atk);
+					int pd = has(r, "venom_blood") ? 96 : 80;
+					victim.addStatusEffect(new StatusEffectInstance(StatusEffects.POISON, pd, 0), atk);
+					Spells.noteElement(r, "poison", now);
 				}
 				if (has(r, "armor_breaker") && RAND.nextFloat() < 0.12f) {
 					applyArmorBreak(victim, now);
@@ -748,7 +869,9 @@ public final class PassiveEngine {
 		}
 		if (has(r, "soul_collector") && entity instanceof Monster) {
 			r.souls = Math.min(20, r.souls + (boss ? 5 : 1));
+			p.sendMessage(Text.translatable("orvwindow.msg.souls", r.souls), true);
 		}
+		Extras.onKill(p, r, entity, now);
 		if (has(r, "killing_rhythm")) {
 			r.rhythmStacks = (now - r.lastKillTick <= 120) ? Math.min(4, r.rhythmStacks + 1) : 1;
 			r.rhythmUntil = now + 120;
@@ -863,7 +986,13 @@ public final class PassiveEngine {
 		if (has(r, "arcane_recovery") && now - r.lastDamagedTick > 100) {
 			manaMult += 0.5f;
 		}
-		r.mana = Math.min(maxMana, r.mana + (1f / 20f) * manaMult);
+		if (has(r, "forbidden_knowledge")) {
+			manaMult -= 0.40f;
+		}
+		if (has(r, "mystic_resonance") && r.nearMagic) {
+			manaMult += 0.20f;
+		}
+		r.mana = Math.min(maxMana, r.mana + (1f / 20f) * Math.max(0.1f, manaMult));
 
 		// ---- overcharge readiness
 		r.overchargeReady = r.overchargeReady
@@ -902,6 +1031,9 @@ public final class PassiveEngine {
 		if (now % 5 == 0) {
 			applyAttributes(p, r, now, hpFrac);
 		}
+
+		// ---- spells, dash, hunter passives...
+		Extras.tick(p, r, now);
 
 		// ---- sync to client
 		syncResources(p, r, now, maxMana, maxSta);
@@ -989,6 +1121,9 @@ public final class PassiveEngine {
 		}
 		if (has(r, "dual_wielder") && isWeapon(p.getMainHandStack()) && isWeapon(p.getOffHandStack())) {
 			atkSpeed += 0.10;
+		}
+		if (now < r.reflexUntil) {
+			atkSpeed += 0.25;
 		}
 		atkSpeed = Math.min(CAP_ATTACK_SPEED, atkSpeed);
 

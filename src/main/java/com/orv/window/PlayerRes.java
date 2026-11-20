@@ -1,9 +1,12 @@
 package com.orv.window;
 
 import net.minecraft.entity.effect.StatusEffect;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.math.Vec3d;
 
+import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -96,4 +99,57 @@ public class PlayerRes {
 	// attribute modifiers already applied (so we only touch them when the value changes)
 	public final Map<String, Double> lastAttr = new HashMap<>();
 	public ServerPlayerEntity attrOwner = null;
+
+	// ---- spells
+	public int castSpell = -1;
+	public long castEnd = 0;
+	public int echoSpell = -1;
+	public long echoAt = 0;
+	public long echoIcd = 0;
+	public int lastSpell = -1;
+	public long lastSpellTick = -1000;
+	public final Map<String, Long> spellRecent = new HashMap<>();
+	public final Map<String, Long> elemRecent = new HashMap<>();
+	public long overflowUntil = 0;
+	public long overflowIcd = 0;
+	public long harmonyUntil = 0;
+	public long harmonyIcd = 0;
+	public long chainIcd = 0;
+	public long glacialIcd = 0;
+	public int charge = 0;
+	public long soulEaterIcd = 0;
+	public boolean nearMagic = false;
+
+	// ---- extra combat passives
+	public long reflexUntil = 0;
+	public long reflexIcd = 0;
+	public long counterIcd = 0;
+	public long dualIcd = 0;
+	public ItemStack refundStack = null;
+	public int refundTo = 0;
+	public long absorbIcd = 0;
+
+	// ---- dash / roll
+	public long dashIcd = 0;
+	public long iframeUntil = 0;
+
+	// ---- hunter
+	public UUID aimTarget = null;
+	public long aimSince = 0;
+	public UUID weakTarget = null;
+	public long weakUntil = 0;
+	public long weakIcd = 0;
+	public java.util.Set<UUID> aware = new java.util.HashSet<>();
+	public long warnIcd = 0;
+	public final Map<UUID, Blood> bleeders = new HashMap<>();
+
+	public static final class Blood {
+		public long until;
+		public final ArrayDeque<net.minecraft.util.math.Vec3d> trail = new ArrayDeque<>();
+	}
+
+	// ---- combat medic
+	public Item useItem = null;
+	public int useLeft = 0;
+	public float hpPrev = -1f;
 }

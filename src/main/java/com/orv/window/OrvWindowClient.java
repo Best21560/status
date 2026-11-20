@@ -47,6 +47,9 @@ public class OrvWindowClient implements ClientModInitializer {
 
 	public static KeyBinding bloodKey;
 	public static KeyBinding shieldKey;
+	public static final KeyBinding[] SPELL_KEYS = new KeyBinding[4];
+	public static KeyBinding soulKey;
+	public static KeyBinding dashKey;
 
 	@Override
 	public void onInitializeClient() {
@@ -64,7 +67,36 @@ public class OrvWindowClient implements ClientModInitializer {
 		shieldKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.orvwindow.mana_shield", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_G, "category.orvwindow"));
 
+		int[] spellGlfw = {GLFW.GLFW_KEY_Z, GLFW.GLFW_KEY_X, GLFW.GLFW_KEY_C, GLFW.GLFW_KEY_B};
+		String[] spellNames = {"arcane", "fire", "frost", "thunder"};
+		for (int i = 0; i < 4; i++) {
+			SPELL_KEYS[i] = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+					"key.orvwindow.spell_" + spellNames[i], InputUtil.Type.KEYSYM, spellGlfw[i], "category.orvwindow"));
+		}
+		soulKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+				"key.orvwindow.soul_eater", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_N, "category.orvwindow"));
+		dashKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+				"key.orvwindow.dash", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_R, "category.orvwindow"));
+
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
+			MoveClient.tick(client);
+			for (int i = 0; i < 4; i++) {
+				while (SPELL_KEYS[i].wasPressed()) {
+					if (client.player != null && client.currentScreen == null) {
+						sendAction(2 + i);
+					}
+				}
+			}
+			while (soulKey.wasPressed()) {
+				if (client.player != null && client.currentScreen == null) {
+					sendAction(6);
+				}
+			}
+			while (dashKey.wasPressed()) {
+				if (client.player != null && client.currentScreen == null) {
+					MoveClient.dash(client);
+				}
+			}
 			while (openKey.wasPressed()) {
 				if (client.player != null && client.currentScreen == null) {
 					openWindow(client);

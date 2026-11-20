@@ -314,5 +314,15 @@
   "orvwindow.msg.manashield_off": "Mana Shield: ปิด",
   "orvwindow.status.active": "ทำงานในเกมแล้ว",
   "orvwindow.status.partial": "ทำงานบางส่วน",
-  "orvwindow.status.pending": "ยังไม่ทำงาน (รอระบบที่เกี่ยวข้อง)"
+  "orvwindow.status.pending": "ยังไม่ทำงาน (รอระบบที่เกี่ยวข้อง)",
+  "key.orvwindow.spell_arcane": "เวท: Arcane Bolt",
+  "key.orvwindow.spell_fire": "เวท: Flame Burst",
+  "key.orvwindow.spell_frost": "เวท: Frost Shard",
+  "key.orvwindow.spell_thunder": "เวท: Thunder Strike",
+  "key.orvwindow.soul_eater": "Soul Eater (ใช้ 5 Soul ฟื้น HP)",
+  "key.orvwindow.dash": "พุ่งตัว / กลิ้งหลบ",
+  "orvwindow.msg.no_mana": "Mana ไม่พอ",
+  "orvwindow.msg.souls": "Soul %s/20",
+  "orvwindow.msg.soul_eater_fail": "ใช้ Soul Eater ไม่ได้ (Soul ไม่ถึง 5 หรือยังติดคูลดาวน์)",
+  "orvwindow.msg.danger": "⚠ อันตรายใกล้ตัว!"
 }
