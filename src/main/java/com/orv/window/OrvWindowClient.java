@@ -172,7 +172,24 @@ public class OrvWindowClient implements ClientModInitializer {
 			float st = buf.readFloat();
 			float ms = buf.readFloat();
 			boolean ex = buf.readBoolean();
+			boolean sl = buf.readBoolean();
+			float rg = buf.readFloat();
+			int bt = buf.readVarInt();
+			boolean lk = buf.readBoolean();
+			String atk = buf.readString(64);
+			int[] cd = new int[5];
+			for (int i = 0; i < 5; i++) {
+				cd[i] = buf.readVarInt();
+			}
 			client.execute(() -> {
+				slayer = sl;
+				rage = rg;
+				Fx.berserkTicks = bt;
+				Fx.locked = lk;
+				BerserkClient.attacker = atk;
+				for (int i = 0; i < 5; i++) {
+					cdEnd[i] = Fx.clientTick + cd[i];
+				}
 				mana = m;
 				maxMana = mm;
 				stamina = st;
@@ -241,6 +258,11 @@ public class OrvWindowClient implements ClientModInitializer {
 			exhausted = false;
 			myClass = "";
 			classKnown = false;
+			slayer = false;
+			rage = 0f;
+			java.util.Arrays.fill(cdEnd, 0L);
+			BerserkClient.attacker = "";
+			Fx.reset();
 		});
 
 		// /status name <ชื่อ>
