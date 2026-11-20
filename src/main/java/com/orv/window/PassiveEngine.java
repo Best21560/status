@@ -946,6 +946,9 @@ public final class PassiveEngine {
 	 * (spending, Blood Conversion...) is applied on top of Iron's value, then both sides hold the same number.
 	 */
 	private static void syncIronsMana(ServerPlayerEntity p, PlayerRes r) {
+		if (IronsLink.available() && !r.classId.isEmpty()) {
+			IronsLink.setClassMax(p, Classes.mana(r.classId) + (has(r, "mana_pool") ? 20f : 0f));
+		}
 		float max = IronsLink.maxMana(p);
 		float cur = IronsLink.mana(p);
 		if (max <= 0f || cur < 0f) {

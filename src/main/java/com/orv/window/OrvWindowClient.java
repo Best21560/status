@@ -127,7 +127,8 @@ public class OrvWindowClient implements ClientModInitializer {
 				while (judgmentKey.wasPressed()) {
 					// no 4th skill for this class
 				}
-				boolean atk = client.options.attackKey.isPressed();
+				boolean atk = client.options.attackKey.isPressed()
+						|| org.lwjgl.glfw.GLFW.glfwGetMouseButton(client.getWindow().getHandle(), org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT) == org.lwjgl.glfw.GLFW.GLFW_PRESS;
 				if (atk && !prevAttack && LightClient.orbsOut()) {
 					sendAction(23);
 				}

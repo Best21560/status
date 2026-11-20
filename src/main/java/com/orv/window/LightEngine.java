@@ -35,6 +35,8 @@ public final class LightEngine {
 
 	public static final String ID = "lightbender";
 	public static final float ORB_HP = 1200f;
+	/** Reach of the orbs (M1 and the shattered Halo), in blocks. */
+	public static final double RANGE = 40.0;
 	/** Cooldowns in ticks: Divine Orb, Seraph Domain, Halo Shatter. */
 	public static final int[] CD = {60, 240, 1200};
 
@@ -193,15 +195,35 @@ public final class LightEngine {
 		Vec3d look = p.getRotationVec(1f);
 		Vec3d from = LightGeo.orbPos(p.getPos(), p.bodyYaw, pick, w.getTime() / 20.0);
 		LivingEntity hit = null;
-		Vec3d end = eye.add(look.multiply(15.0));
-		for (double d = 0.8; d <= 15.0 && hit == null; d += 0.5) {
+		Vec3d end = eye.add(look.multiply(RANGE));
+		for (double d = 0.8; d <= RANGE && hit == null; d += 0.6) {
 			Vec3d pt = eye.add(look.multiply(d));
-			List<Entity> list = w.getOtherEntities(p, new Box(pt.x - 0.6, pt.y - 0.6, pt.z - 0.6, pt.x + 0.6, pt.y + 0.6, pt.z + 0.6),
+			List<Entity> list = w.getOtherEntities(p, new Box(pt.x - 0.7, pt.y - 0.7, pt.z - 0.7, pt.x + 0.7, pt.y + 0.7, pt.z + 0.7),
 					e -> e instanceof LivingEntity le && le.isAlive() && !(e instanceof PlayerEntity));
 			if (!list.isEmpty()) {
 				hit = (LivingEntity) list.get(0);
-				end = hit.getPos().add(0, hit.getHeight() * 0.6, 0);
 			}
+		}
+		if (hit == null) {
+			// nothing under the crosshair: the orb hunts the enemy closest to where we look (within 40 blocks)
+			double best = -2.0;
+			for (LivingEntity e : w.getEntitiesByClass(LivingEntity.class, p.getBoundingBox().expand(RANGE),
+					e -> e.isAlive() && e != p && !(e instanceof PlayerEntity) && !(e instanceof net.minecraft.entity.decoration.ArmorStandEntity)
+							&& (e instanceof Monster || e instanceof net.minecraft.entity.mob.MobEntity m && m.getTarget() == p))) {
+				Vec3d to = e.getPos().add(0, e.getHeight() * 0.6, 0).subtract(eye);
+				double dist = to.length();
+				if (dist > RANGE || dist < 0.5) {
+					continue;
+				}
+				double score = to.multiply(1.0 / dist).dotProduct(look) * 2.0 - dist / RANGE;
+				if (score > best) {
+					best = score;
+					hit = e;
+				}
+			}
+		}
+		if (hit != null) {
+			end = hit.getPos().add(0, hit.getHeight() * 0.6, 0);
 		}
 		r.orbHp[pick] = Math.max(0f, r.orbHp[pick] - 100f);
 		FxNet.send(w, FxNet.ORB_SHOT, from, end.subtract(from), 0f, 0);
@@ -291,7 +313,7 @@ public final class LightEngine {
 		int total = Math.min(150, (int) (r.haloPct / 3f));
 		int homing = (int) (total * 0.4f);
 		int ring = total - homing;
-		List<LivingEntity> foes = new ArrayList<>(w.getEntitiesByClass(LivingEntity.class, p.getBoundingBox().expand(30.0),
+		List<LivingEntity> foes = new ArrayList<>(w.getEntitiesByClass(LivingEntity.class, p.getBoundingBox().expand(RANGE),
 				e -> e.isAlive() && e != p && e instanceof Monster));
 		foes.sort((a, b) -> Double.compare(a.squaredDistanceTo(p), b.squaredDistanceTo(p)));
 		if (foes.isEmpty()) {

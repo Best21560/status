@@ -82,6 +82,42 @@ public final class IronsLink {
 		}
 	}
 
+	private static final java.util.UUID BONUS_ID = java.util.UUID.fromString("5b1f0c3a-0000-4000-8000-0000000000b1");
+
+	/**
+	 * Makes Iron's maximum Mana equal to the class value (Iron's own base is 100): adds or removes a modifier
+	 * on its max-Mana attribute so that base + bonus = target. Items and effects from Iron's still stack on top.
+	 */
+	public static void setClassMax(ServerPlayerEntity p, double target) {
+		if (!ok) {
+			return;
+		}
+		try {
+			Object a = maxManaAttr.get();
+			if (a == null) {
+				return;
+			}
+			EntityAttributeInstance inst = p.getAttributeInstance((EntityAttribute) a);
+			if (inst == null) {
+				return;
+			}
+			double bonus = target - inst.getBaseValue();
+			net.minecraft.entity.attribute.EntityAttributeModifier old = inst.getModifier(BONUS_ID);
+			if (old != null && Math.abs(old.getValue() - bonus) < 1e-6) {
+				return;
+			}
+			if (old != null) {
+				inst.removeModifier(BONUS_ID);
+			}
+			if (Math.abs(bonus) > 1e-6) {
+				inst.addTemporaryModifier(new net.minecraft.entity.attribute.EntityAttributeModifier(BONUS_ID, "orv_class_mana", bonus,
+						net.minecraft.entity.attribute.EntityAttributeModifier.Operation.ADDITION));
+			}
+		} catch (Throwable t) {
+			// ignore: the link just keeps Iron's own maximum
+		}
+	}
+
 	/** Iron's maximum Mana of the player, or -1 if unknown. */
 	public static float maxMana(ServerPlayerEntity p) {
 		if (!ok) {
