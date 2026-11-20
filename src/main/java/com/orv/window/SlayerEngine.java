@@ -35,7 +35,7 @@ public final class SlayerEngine {
 	public static final int BERSERK_TICKS = 20 * 20;
 
 	// cooldowns in ticks
-	public static final int[] CD = {100, 300, 80, 160, 1800};
+	public static final int[] CD = {80, 260, 60, 160, 1800};
 	public static final int SLASH = 0;
 	public static final int PURSUIT = 1;
 	public static final int COUNTER = 2;
@@ -83,6 +83,10 @@ public final class SlayerEngine {
 		r.berserkUntil = 0;
 		r.rage = 0f;
 		r.rageLockUntil = now + 100;
+		// the price of the rage: 8 seconds of exhaustion
+		p.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 160, 0));
+		p.addStatusEffect(new StatusEffectInstance(StatusEffects.WEAKNESS, 160, 0));
+		r.stamina = Math.min(r.stamina, 100f);
 		p.sendMessage(Text.translatable("orvwindow.msg.berserk_off"), true);
 		FxNet.send(p.getServerWorld(), FxNet.BERSERK_END, p.getPos(), Vec3d.ZERO, 0f, 0);
 	}
@@ -152,7 +156,12 @@ public final class SlayerEngine {
 	}
 
 	private static float base(ServerPlayerEntity p) {
-		return Math.max(2f, (float) p.getAttributeValue(EntityAttributes.GENERIC_ATTACK_DAMAGE));
+		float dmg = Math.max(2f, (float) p.getAttributeValue(EntityAttributes.GENERIC_ATTACK_DAMAGE));
+		// comeback bonus: with this much Health the Slayer should hit harder the closer he is to the edge
+		if (p.getHealth() < p.getMaxHealth() * 0.5f) {
+			dmg *= 1.25f;
+		}
+		return dmg;
 	}
 
 	private static boolean ready(ServerPlayerEntity p, PlayerRes r, int skill, long now) {
@@ -224,14 +233,14 @@ public final class SlayerEngine {
 	// ------------------------------------------------------------------ 1. Slash
 
 	private static void slash(ServerPlayerEntity p, PlayerRes r, long now) {
-		if (!ready(p, r, SLASH, now) || !payStamina(p, r, 15f)) {
+		if (!ready(p, r, SLASH, now) || !payStamina(p, r, 45f)) {
 			return;
 		}
 		r.cdEnd[SLASH] = now + CD[SLASH];
 		ServerWorld w = p.getServerWorld();
 		Vec3d eye = p.getEyePos();
 		Vec3d look = p.getRotationVec(1f);
-		float dmg = base(p) * 1.6f;
+		float dmg = base(p) * 1.8f;
 		p.swingHand(Hand.MAIN_HAND, true);
 		EpicLink.play(p, r.slashFlip ? "GREATSWORD_AUTO2" : "GREATSWORD_AUTO1");
 		FxNet.send(w, FxNet.SLASH, eye.add(0, -0.3, 0), look, r.slashFlip ? -32f : 32f, 1);
@@ -381,7 +390,7 @@ public final class SlayerEngine {
 			p.sendMessage(Text.translatable("orvwindow.msg.no_target"), true);
 			return;
 		}
-		if (!payStamina(p, r, 20f)) {
+		if (!payStamina(p, r, 60f)) {
 			return;
 		}
 		r.cdEnd[FATAL] = now + CD[FATAL];
@@ -390,7 +399,7 @@ public final class SlayerEngine {
 		p.swingHand(Hand.MAIN_HAND, true);
 		EpicLink.play(p, "GREATSWORD_AIR_SLASH");
 		FxNet.send(w, FxNet.SLASH, p.getEyePos().add(0, -0.1, 0), dir, 8f, 2);
-		strike(p, t, base(p) * 3.0f);
+		strike(p, t, base(p) * 3.2f);
 		t.takeKnockback(1.1, -dir.x, -dir.z);
 		FxNet.send(w, FxNet.IMPACT, chest(t), dir, 2f, 2);
 	}

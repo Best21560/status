@@ -47,6 +47,7 @@ public class OrvWindowClient implements ClientModInitializer {
 	/** My class id ("" = none). classKnown turns true once the server told us. */
 	public static volatile String myClass = "";
 	public static volatile boolean classKnown = false;
+	private static boolean prevAttack = false;
 	/** Slayer: Rage 0-100 and the client tick at which each skill is ready again. */
 	public static volatile boolean slayer = false;
 	public static volatile float rage = 0f;
@@ -113,6 +114,24 @@ public class OrvWindowClient implements ClientModInitializer {
 				while (judgmentKey.wasPressed()) {
 					sendAction(13);
 				}
+			} else if (myClass.equals("lightbender") && !noControl && client.player != null && client.currentScreen == null) {
+				while (slashKey.wasPressed()) {
+					sendAction(20);
+				}
+				while (pursuitKey.wasPressed()) {
+					sendAction(21);
+				}
+				while (fatalKey.wasPressed()) {
+					sendAction(22);
+				}
+				while (judgmentKey.wasPressed()) {
+					// no 4th skill for this class
+				}
+				boolean atk = client.options.attackKey.isPressed();
+				if (atk && !prevAttack && LightClient.orbsOut()) {
+					sendAction(23);
+				}
+				prevAttack = atk;
 			} else {
 				while (slashKey.wasPressed() || pursuitKey.wasPressed() || fatalKey.wasPressed() || judgmentKey.wasPressed()) {
 					// drop presses while the player has no control
@@ -151,6 +170,9 @@ public class OrvWindowClient implements ClientModInitializer {
 
 		HudRenderCallback.EVENT.register(VitalsHud::render);
 		HudRenderCallback.EVENT.register(Fx::renderHud);
+
+		ClientPlayNetworking.registerGlobalReceiver(OrvWindowMod.LIGHT, (client, handler, buf, responseSender) ->
+				LightClient.receive(client, buf));
 
 		ClientPlayNetworking.registerGlobalReceiver(OrvWindowMod.FX, (client, handler, buf, responseSender) -> {
 			int type = buf.readVarInt();

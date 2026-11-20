@@ -187,4 +187,27 @@ public class PlayerRes {
 	public int sentRageI = -1;
 	public int sentBits = -1;
 	public String sentAtk = "";
+
+	// ---- Lightbender
+	public final float[] orbHp = new float[8];
+	public boolean orbsOn = false;
+	public long orbWave2At = 0;
+	public float healPct = 0f;
+	public long lastHealAt = 0;
+	/** Cooldown end ticks: 0 Divine Orb, 1 Seraph Domain, 2 Halo Shatter. */
+	public final long[] lbCd = new long[3];
+	public long lbShootAt = 0;
+	public int seraphStage = 0;
+	public long seraphAt = 0;
+	public long extraUntil = 0;
+	public long extraIcd = 0;
+	public long extraHitAt = 0;
+	public long haloUntil = 0;
+	public float haloPct = 0f;
+	public int ringCount = 0;
+	public long ringUntil = 0;
+	public final java.util.Map<UUID, Long> ringTouch = new java.util.HashMap<>();
+	public final java.util.List<LightEngine.Proj> projs = new java.util.ArrayList<>();
+	public int sentLbHash = 0;
+	public long sentLbAt = 0;
 }

@@ -43,6 +43,8 @@ public class OrvWindowMod implements ModInitializer {
 	/** client -> server: a key was pressed (see PassiveEngine.action / Extras.action). */
 	/** server -> client: a visual effect (see FxNet / Fx). */
 	public static final Identifier FX = new Identifier("orvwindow", "fx");
+	/** Lightbender state of one caster (orbs, halo, heal %, cooldowns), sent to the players around. */
+	public static final Identifier LIGHT = new Identifier("orvwindow", "light");
 	public static final Identifier ACTION = new Identifier("orvwindow", "action");
 
 	private static final Set<UUID> OPEN = ConcurrentHashMap.newKeySet();
@@ -135,6 +137,7 @@ public class OrvWindowMod implements ModInitializer {
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
 			UUID id = handler.player.getUuid();
 			SlayerEngine.onLeave(handler.player);
+			LightEngine.onLeave(handler.player);
 			PassiveEngine.clear(id);
 			if (OPEN.remove(id)) {
 				broadcast(server, id, false);

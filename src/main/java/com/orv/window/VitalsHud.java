@@ -135,6 +135,10 @@ public final class VitalsHud {
 			renderSlots(ctx, tr, sw - (5 * 26 - 3) - 8, sh - 23 - 8, rage, nowMs);
 		}
 
+		if (OrvWindowClient.myClass.equals("lightbender")) {
+			LightClient.renderHud(ctx, tr);
+		}
+
 		renderTarget(ctx, mc, tr);
 	}
 

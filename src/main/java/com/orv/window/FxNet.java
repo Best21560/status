@@ -24,6 +24,12 @@ public final class FxNet {
 	public static final int PARRY = 8;
 	public static final int GRAB = 9;
 	public static final int FLASH = 10;
+	/** Lightbender: summoning circle (pos, dir=back direction), heal pulse (a=radius), homing light (dir=to target, a=seconds), orb shot (dir=to end), halo burst. */
+	public static final int LB_CIRCLE = 11;
+	public static final int PROJ = 12;
+	public static final int HEAL_PULSE = 13;
+	public static final int ORB_SHOT = 14;
+	public static final int HALO_BURST = 15;
 
 	private static PacketByteBuf make(int type, Vec3d pos, Vec3d dir, float a, int b) {
 		PacketByteBuf out = PacketByteBufs.create();

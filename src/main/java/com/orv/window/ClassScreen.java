@@ -160,9 +160,9 @@ public class ClassScreen extends Screen {
 		int h = 18 + 7 * 20 + 14;
 		panel(ctx, x, y, w, h, Text.translatable("orvwindow.class.stats"));
 		int ry = y + 26;
-		row(ctx, x, ry, w, "hp", String.valueOf((int) Math.round(20 + d.hp())), (20 + d.hp()) / 30.0);
-		row(ctx, x, ry + 20, w, "mana", String.valueOf((int) d.mana()), d.mana() / 150.0);
-		row(ctx, x, ry + 40, w, "stamina", String.valueOf((int) d.stamina()), d.stamina() / 150.0);
+		row(ctx, x, ry, w, "hp", String.valueOf((int) Math.round(20 + d.hp())), (20 + d.hp()) / 800.0);
+		row(ctx, x, ry + 20, w, "mana", String.valueOf((int) d.mana()), d.mana() / 500.0);
+		row(ctx, x, ry + 40, w, "stamina", String.valueOf((int) d.stamina()), d.stamina() / 600.0);
 		row(ctx, x, ry + 60, w, "attack", signed(d.attack(), 1), d.attack() / 1.5);
 		row(ctx, x, ry + 80, w, "armor", signed(d.armor(), 0), d.armor() / 3.0);
 		row(ctx, x, ry + 100, w, "speed", pct(d.speed()), (d.speed() + 0.05) / 0.15);

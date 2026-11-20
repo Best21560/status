@@ -81,6 +81,7 @@ public final class Fx {
 
 	public static void reset() {
 		LIST.clear();
+		LightClient.reset();
 		berserkTicks = 0;
 		locked = false;
 		cutscene = false;
@@ -126,6 +127,11 @@ public final class Fx {
 			case FxNet.GRAB -> 0.7f;
 			case FxNet.PARRY -> 0.4f;
 			case FxNet.BERSERK_START -> 1.2f;
+			case FxNet.LB_CIRCLE -> 1.4f;
+			case FxNet.PROJ -> Math.max(0.2f, a) + 0.1f;
+			case FxNet.HEAL_PULSE -> 1.0f;
+			case FxNet.ORB_SHOT -> 0.25f;
+			case FxNet.HALO_BURST -> 0.9f;
 			default -> 0.4f;
 		};
 		if (LIST.size() > 160) {
@@ -172,6 +178,21 @@ public final class Fx {
 				s = OrvSounds.PARRY;
 				vol = 1.0f;
 			}
+			case FxNet.LB_CIRCLE, FxNet.HEAL_PULSE -> {
+				s = OrvSounds.PARRY;
+				vol = 0.6f;
+				pitch = 1.5f;
+			}
+			case FxNet.ORB_SHOT -> {
+				s = OrvSounds.DASH;
+				vol = 0.5f;
+				pitch = 1.6f;
+			}
+			case FxNet.HALO_BURST -> {
+				s = b == 1 ? OrvSounds.BOOM : OrvSounds.PARRY;
+				vol = 1.0f;
+				pitch = b == 1 ? 1.3f : 1.1f;
+			}
 			case FxNet.BERSERK_START -> {
 				s = OrvSounds.BERSERK;
 				vol = 1.6f;
@@ -214,22 +235,22 @@ public final class Fx {
 
 	// ------------------------------------------------------------------ small helpers
 
-	private static float clamp01(float x) {
+	static float clamp01(float x) {
 		return x < 0f ? 0f : (x > 1f ? 1f : x);
 	}
 
-	private static double easeOut(double x) {
+	static double easeOut(double x) {
 		x = Math.max(0, Math.min(1, x));
 		double k = 1 - x;
 		return 1 - k * k * k;
 	}
 
-	private static int argb(int rgb, float alpha) {
+	static int argb(int rgb, float alpha) {
 		int a = Math.round(255f * clamp01(alpha));
 		return (a << 24) | (rgb & 0xFFFFFF);
 	}
 
-	private static int mix(int rgbA, int rgbB, float t) {
+	static int mix(int rgbA, int rgbB, float t) {
 		t = clamp01(t);
 		int r = Math.round(((rgbA >> 16) & 255) * (1 - t) + ((rgbB >> 16) & 255) * t);
 		int g = Math.round(((rgbA >> 8) & 255) * (1 - t) + ((rgbB >> 8) & 255) * t);
@@ -238,7 +259,7 @@ public final class Fx {
 	}
 
 	/** Pseudo random number in [0,1) from a seed and an index. */
-	private static float rnd(long seed, int i) {
+	static float rnd(long seed, int i) {
 		long z = seed + 0x9E3779B97F4A7C15L * (i + 1);
 		z = (z ^ (z >>> 30)) * 0xBF58476D1CE4E5B9L;
 		z = (z ^ (z >>> 27)) * 0x94D049BB133111EBL;
@@ -247,7 +268,7 @@ public final class Fx {
 	}
 
 	/** Drawing helper: a buffer plus the camera offset. */
-	private static final class Pen {
+	static final class Pen {
 		final BufferBuilder b;
 		final Matrix4f m;
 		final Vec3d cam;
@@ -344,6 +365,56 @@ public final class Fx {
 			}
 		}
 
+		/** A leaf-shaped petal: bright at the root, fading to the tip. dir and side are unit vectors in the petal plane. */
+		void petal(Vec3d root, Vec3d dir, Vec3d side, double len, double width, int rgb, float alpha) {
+			if (alpha <= 0.003f) {
+				return;
+			}
+			Vec3d tip = root.add(dir.multiply(len));
+			Vec3d mid = root.add(dir.multiply(len * 0.45));
+			Vec3d l = mid.add(side.multiply(width * 0.5));
+			Vec3d r = mid.subtract(side.multiply(width * 0.5));
+			int cRoot = argb(rgb, alpha * 0.9f);
+			int cMid = argb(rgb, alpha * 0.55f);
+			int cTip = argb(rgb, alpha * 0.1f);
+			quad(root, l, tip, r, cRoot, cMid, cTip, cMid);
+		}
+
+		/** A flowing ribbon through the given points (camera-facing), tapering in width and opacity. */
+		void ribbon(Vec3d[] pts, double w0, double w1, int rgb, float a0, float a1) {
+			int n = pts.length;
+			for (int i = 0; i < n - 1; i++) {
+				float s0 = i / (float) (n - 1);
+				float s1 = (i + 1) / (float) (n - 1);
+				double w = w0 + (w1 - w0) * (s0 + s1) * 0.5;
+				streak(pts[i], pts[i + 1], w, argb(rgb, a0 + (a1 - a0) * s0), argb(rgb, a0 + (a1 - a0) * s1));
+			}
+		}
+
+		/** Ring in an arbitrary plane given by two unit axes u and v. */
+		void ringIn(Vec3d c, Vec3d u, Vec3d v, double radius, double thickness, int rgb, float alpha) {
+			if (alpha <= 0.003f) {
+				return;
+			}
+			int hot = argb(rgb, alpha);
+			int cold = argb(rgb, 0f);
+			int n = 48;
+			double r0 = Math.max(0.01, radius - thickness);
+			double r2 = radius + thickness * 0.6;
+			for (int i = 0; i < n; i++) {
+				double a0 = i * Math.PI * 2 / n;
+				double a1 = (i + 1) * Math.PI * 2 / n;
+				Vec3d i0 = c.add(u.multiply(Math.cos(a0) * r0)).add(v.multiply(Math.sin(a0) * r0));
+				Vec3d i1 = c.add(u.multiply(Math.cos(a1) * r0)).add(v.multiply(Math.sin(a1) * r0));
+				Vec3d m0 = c.add(u.multiply(Math.cos(a0) * radius)).add(v.multiply(Math.sin(a0) * radius));
+				Vec3d m1 = c.add(u.multiply(Math.cos(a1) * radius)).add(v.multiply(Math.sin(a1) * radius));
+				Vec3d o0 = c.add(u.multiply(Math.cos(a0) * r2)).add(v.multiply(Math.sin(a0) * r2));
+				Vec3d o1 = c.add(u.multiply(Math.cos(a1) * r2)).add(v.multiply(Math.sin(a1) * r2));
+				quad(i0, m0, m1, i1, cold, hot, hot, cold);
+				quad(m0, o0, o1, m1, hot, cold, cold, hot);
+			}
+		}
+
 		/** Vertical beam of light that always faces the camera. */
 		void pillar(Vec3d base, double height, double halfWidth, int rgb, float alpha) {
 			if (alpha <= 0.003f) {
@@ -371,7 +442,7 @@ public final class Fx {
 			return;
 		}
 		boolean aura = berserkTicks > 0 || (OrvWindowClient.slayer && OrvWindowClient.rage >= 70f);
-		if (LIST.isEmpty() && !aura) {
+		if (LIST.isEmpty() && !aura && !LightClient.any()) {
 			return;
 		}
 		MatrixStack ms = ctx.matrixStack();
@@ -408,6 +479,11 @@ public final class Fx {
 				case FxNet.GRAB -> drawGrab(pen, e, tt);
 				case FxNet.PARRY -> drawParry(pen, e, tt, age);
 				case FxNet.BERSERK_START -> drawBerserkBurst(pen, e, tt);
+				case FxNet.LB_CIRCLE -> LightClient.drawCircle(pen, e.pos, e.dir, e.a, e.b, tt);
+				case FxNet.PROJ -> LightClient.drawProj(pen, e.pos, e.dir, age, e.a);
+				case FxNet.HEAL_PULSE -> LightClient.drawPulse(pen, e.pos, e.a, e.b, tt);
+				case FxNet.ORB_SHOT -> LightClient.drawShot(pen, e.pos, e.dir, tt);
+				case FxNet.HALO_BURST -> LightClient.drawBurst(pen, e.pos, e.b, tt);
 				default -> {
 				}
 			}
@@ -415,6 +491,7 @@ public final class Fx {
 		if (aura) {
 			drawAura(pen, mc, td);
 		}
+		LightClient.render(pen, mc, td);
 
 		Tessellator.getInstance().draw();
 

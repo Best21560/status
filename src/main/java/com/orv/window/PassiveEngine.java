@@ -267,6 +267,7 @@ public final class PassiveEngine {
 		float out = amount;
 		Entity a = source.getAttacker();
 		if (a instanceof ServerPlayerEntity atk) {
+			out = LightEngine.attackerAdjust(atk, source, out);
 			out = attackerBonus(atk, victim, source, out, now);
 		}
 		if (a == null && !(victim instanceof PlayerEntity) && isTrapDamage(source)) {
@@ -474,6 +475,7 @@ public final class PassiveEngine {
 
 	private static float defenderReduction(ServerPlayerEntity vp, DamageSource source, float amount, long now) {
 		PlayerRes r = res(vp.getUuid());
+		amount = LightEngine.defenderAdjust(vp, r, amount, now);
 		if (SlayerEngine.is(r)) {
 			if (SlayerEngine.berserk(r, now)) {
 				amount *= 0.9f;
@@ -887,6 +889,7 @@ public final class PassiveEngine {
 			r.souls /= 2;
 			if (SlayerEngine.is(r)) {
 				SlayerEngine.onLeave(dead);
+				LightEngine.onLeave(dead);
 				r.rage = 0f;
 				r.berserkUntil = 0;
 				r.pTarget = null;
