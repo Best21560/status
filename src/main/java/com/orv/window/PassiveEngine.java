@@ -101,7 +101,6 @@ public final class PassiveEngine {
 	public static void init() {
 		ServerTickEvents.END_SERVER_TICK.register(PassiveEngine::serverTick);
 		ServerLivingEntityEvents.AFTER_DEATH.register(PassiveEngine::afterDeath);
-		PlayerBlockBreakEvents.AFTER.register(PassiveEngine::afterBlockBreak);
 		AttackEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
 			if (!world.isClient && player instanceof ServerPlayerEntity sp) {
 				beforeAttackReset(sp);
@@ -757,42 +756,6 @@ public final class PassiveEngine {
 		}
 	}
 
-	// ------------------------------------------------------------------ extra drops
-
-	private static void afterBlockBreak(World world, PlayerEntity player, BlockPos pos, BlockState state, BlockEntity be) {
-		if (world.isClient || be != null || !(player instanceof ServerPlayerEntity sp) || sp.isCreative()
-				|| !(world instanceof ServerWorld sw)) {
-			return;
-		}
-		PlayerRes r = res(sp.getUuid());
-		if (r.owned.isEmpty()) {
-			return;
-		}
-		boolean extra = false;
-		if (has(r, "forager") && (state.getBlock() instanceof PlantBlock || state.getBlock() instanceof SweetBerryBushBlock)
-				&& RAND.nextFloat() < 0.20f) {
-			extra = true;
-		}
-		if (!extra && has(r, "resourceful") && RAND.nextFloat() < 0.08f) {
-			extra = true;
-		}
-		if (!extra) {
-			return;
-		}
-		List<ItemStack> drops = Block.getDroppedStacks(state, sw, pos, null, sp, sp.getMainHandStack());
-		if (drops.isEmpty()) {
-			return;
-		}
-		ItemStack first = drops.get(0);
-		// blocks that drop themselves are skipped (place/break would duplicate items)
-		if (first.getItem() == state.getBlock().asItem()) {
-			return;
-		}
-		ItemStack one = first.copy();
-		one.setCount(1);
-		Block.dropStack(sw, pos, one);
-	}
-
 	// ------------------------------------------------------------------ per-tick work
 
 	private static void serverTick(MinecraftServer server) {
@@ -934,32 +897,6 @@ public final class PassiveEngine {
 		if (has(r, "tenacity")) {
 			applyTenacity(p, r);
 		}
-		if (has(r, "survivor")) {
-			HungerManager hm = p.getHungerManager();
-			float ex = hm.getExhaustion();
-			if (r.lastExhaustion >= 0f && ex > r.lastExhaustion) {
-				hm.addExhaustion(-0.15f * (ex - r.lastExhaustion));
-			}
-			if (hm.getExhaustion() < 0f) {
-				hm.addExhaustion(-hm.getExhaustion());
-			}
-			r.lastExhaustion = hm.getExhaustion();
-		}
-		if (has(r, "cold_resistance")) {
-			int fz = p.getFrozenTicks();
-			if (r.lastFrozen >= 0 && fz > r.lastFrozen) {
-				r.frozenAcc += (fz - r.lastFrozen) * 0.4f;
-				int cut = (int) r.frozenAcc;
-				r.frozenAcc -= cut;
-				if (cut > 0) {
-					p.setFrozenTicks(Math.max(0, fz - cut));
-				}
-			}
-			r.lastFrozen = p.getFrozenTicks();
-		}
-		if (has(r, "deep_diver") && p.isSubmergedInWater() && now % 3 == 0 && p.getAir() < p.getMaxAir()) {
-			p.setAir(p.getAir() + 1);
-		}
 
 		// ---- attributes (every 5 ticks)
 		if (now % 5 == 0) {
@@ -1067,14 +1004,11 @@ public final class PassiveEngine {
 		}
 		kb = Math.min(1.0, kb);
 
-		double luck = has(r, "lucky_finder") ? 1.0 : 0.0;
-
 		setMod(p, r, EntityAttributes.GENERIC_ARMOR, U_ARMOR, "orv_armor", armor, EntityAttributeModifier.Operation.ADDITION);
 		setMod(p, r, EntityAttributes.GENERIC_MAX_HEALTH, U_HP, "orv_hp", maxHp, EntityAttributeModifier.Operation.ADDITION);
 		setMod(p, r, EntityAttributes.GENERIC_MOVEMENT_SPEED, U_SPEED, "orv_speed", speed, EntityAttributeModifier.Operation.MULTIPLY_TOTAL);
 		setMod(p, r, EntityAttributes.GENERIC_ATTACK_SPEED, U_ATKSPD, "orv_atkspd", atkSpeed, EntityAttributeModifier.Operation.MULTIPLY_TOTAL);
 		setMod(p, r, EntityAttributes.GENERIC_KNOCKBACK_RESISTANCE, U_KB, "orv_kb", kb, EntityAttributeModifier.Operation.ADDITION);
-		setMod(p, r, EntityAttributes.GENERIC_LUCK, U_LUCK, "orv_luck", luck, EntityAttributeModifier.Operation.ADDITION);
 
 		if (p.getHealth() > p.getMaxHealth()) {
 			p.setHealth(p.getMaxHealth());

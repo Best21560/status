@@ -23,7 +23,7 @@ public final class Passives {
 	}
 
 	/** Category keys, in tab order. Names live in the lang files: orvwindow.cat.<key> */
-	public static final List<String> CATEGORIES = List.of("offense", "defense", "movement", "element", "energy", "recovery", "magic", "hunter", "explore", "growth");
+	public static final List<String> CATEGORIES = List.of("offense", "defense", "movement", "element", "energy", "recovery", "magic", "hunter");
 
 	public static final List<Def> ALL = List.of(
 			new Def("power_strike", "Power Strike", "offense", 1),
@@ -160,38 +160,11 @@ public final class Passives {
 			new Def("survival_instinct", "Survival Instinct", "hunter", 2),
 			new Def("hunters_trophy", "Hunter's Trophy", "hunter", 3),
 			new Def("killing_rhythm", "Killing Rhythm", "hunter", 3),
-			new Def("night_predator", "Night Predator", "hunter", 2),
-			new Def("treasure_hunter", "Treasure Hunter", "explore", 2),
-			new Def("lucky_finder", "Lucky Finder", "explore", 3),
-			new Def("scavenger", "Scavenger", "explore", 2),
-			new Def("forager", "Forager", "explore", 1),
-			new Def("miners_instinct", "Miner's Instinct", "explore", 2),
-			new Def("appraiser", "Appraiser", "explore", 1),
-			new Def("cartographer", "Cartographer", "explore", 1),
-			new Def("deep_diver", "Deep Diver", "explore", 2),
-			new Def("desert_walker", "Desert Walker", "explore", 1),
-			new Def("cold_resistance", "Cold Resistance", "explore", 1),
-			new Def("survivor", "Survivor", "explore", 2),
-			new Def("master_chef", "Master Chef", "explore", 2),
-			new Def("resourceful", "Resourceful", "explore", 2),
-			new Def("ancient_sense", "Ancient Sense", "explore", 3),
-			new Def("treasure_instinct", "Treasure Instinct", "explore", 3),
-			new Def("fast_learner", "Fast Learner", "growth", 2),
-			new Def("combat_experience", "Combat Experience", "growth", 2),
-			new Def("skill_prodigy", "Skill Prodigy", "growth", 2),
-			new Def("growth_potential", "Growth Potential", "growth", 3),
-			new Def("weapon_scholar", "Weapon Scholar", "growth", 2),
-			new Def("adaptive_learning", "Adaptive Learning", "growth", 3),
-			new Def("skill_reduction", "Skill Reduction", "growth", 3),
-			new Def("mastery_seeker", "Mastery Seeker", "growth", 2),
-			new Def("awakening_potential", "Awakening Potential", "growth", 4),
-			new Def("limit_breaker", "Limit Breaker", "growth", 4),
-			new Def("evolution", "Evolution", "growth", 4),
-			new Def("perfectionist", "Perfectionist", "growth", 3)
+			new Def("night_predator", "Night Predator", "hunter", 2)
 	);
 
 	/** Passives that work in the game now (see PassiveEngine). */
-	private static final java.util.Set<String> ACTIVE = java.util.Set.of("power_strike", "critical_instinct", "fatal_blow", "armor_breaker", "executioner", "backstabber", "combo_master", "first_blood", "piercing_force", "berserker", "bloodlust", "unstoppable", "predator", "ruthless", "sniper_instinct", "adrenaline_rush", "iron_body", "magic_barrier", "thick_skin", "last_stand", "second_chance", "regeneration", "toughness", "fortress", "evasive_instinct", "deflection", "tenacity", "unyielding", "elemental_resistance", "death_ward", "guardian_spirit", "pain_suppression", "steadfast", "reflective_armor", "adaptation", "swift_feet", "fleet_footed", "lightweight", "shadow_walker", "momentum", "hunters_pursuit", "escape_artist", "swift_recovery", "burning_blood", "ashen_skin", "toxic_touch", "wind_soul", "earth_heart", "natures_blessing", "holy_light", "dark_embrace", "corrosion", "void_resonance", "mana_flow", "mana_pool", "energy_absorption", "stamina_mastery", "second_wind", "overcharge", "arcane_recovery", "battle_focus", "blood_conversion", "mana_shield", "vampirism", "blood_harvest", "soul_drain", "rejuvenation", "desperate_recovery", "life_bond", "overheal", "blood_pact", "natural_healing", "purification", "vitality_surge", "monster_hunter", "beast_slayer", "ambusher", "marked_prey", "killing_rhythm", "night_predator", "lucky_finder", "forager", "resourceful", "survivor", "cold_resistance", "deep_diver");
+	private static final java.util.Set<String> ACTIVE = java.util.Set.of("power_strike", "critical_instinct", "fatal_blow", "armor_breaker", "executioner", "backstabber", "combo_master", "first_blood", "piercing_force", "berserker", "bloodlust", "unstoppable", "predator", "ruthless", "sniper_instinct", "adrenaline_rush", "iron_body", "magic_barrier", "thick_skin", "last_stand", "second_chance", "regeneration", "toughness", "fortress", "evasive_instinct", "deflection", "tenacity", "unyielding", "elemental_resistance", "death_ward", "guardian_spirit", "pain_suppression", "steadfast", "reflective_armor", "adaptation", "swift_feet", "fleet_footed", "lightweight", "shadow_walker", "momentum", "hunters_pursuit", "escape_artist", "swift_recovery", "burning_blood", "ashen_skin", "toxic_touch", "wind_soul", "earth_heart", "natures_blessing", "holy_light", "dark_embrace", "corrosion", "void_resonance", "mana_flow", "mana_pool", "energy_absorption", "stamina_mastery", "second_wind", "overcharge", "arcane_recovery", "battle_focus", "blood_conversion", "mana_shield", "vampirism", "blood_harvest", "soul_drain", "rejuvenation", "desperate_recovery", "life_bond", "overheal", "blood_pact", "natural_healing", "purification", "vitality_surge", "monster_hunter", "beast_slayer", "ambusher", "marked_prey", "killing_rhythm", "night_predator");
 
 	/** Passives that work only in part (some of their effect is still missing). */
 	private static final java.util.Set<String> PARTIAL = java.util.Set.of("heavy_impact", "weapon_mastery", "dual_wielder", "gravity_defier", "soul_collector");
