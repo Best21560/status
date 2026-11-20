@@ -302,5 +302,13 @@
   "orvwindow.stat.armor": "เกราะ",
   "orvwindow.stat.speed": "ความเร็ว",
   "orvwindow.cmd.class_unknown": "ไม่มีคลาส %s",
-  "orvwindow.cmd.class_changed": "เปลี่ยนคลาสของผู้เล่น %s คน"
+  "orvwindow.cmd.class_changed": "เปลี่ยนคลาสของผู้เล่น %s คน",
+  "orvwindow.class.stats": "สเตตัส",
+  "orvwindow.class.about": "คำอธิบาย",
+  "orvwindow.class.perk": "จุดเด่น",
+  "orvwindow.class.lightbender.perk": "มานามากที่สุด เหมาะกับสายพลังงาน",
+  "orvwindow.class.rogue.perk": "ว่องไวที่สุด โจมตีเร็ว Stamina สูง",
+  "orvwindow.class.wuxia.perk": "สมดุลทุกด้าน มานาและ Stamina สูง",
+  "orvwindow.class.slayer.perk": "เลือดและเกราะสูงสุด ดาเมจหนัก",
+  "orvwindow.stat.atkspeed": "ความเร็วโจมตี"
 }
