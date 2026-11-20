@@ -30,6 +30,9 @@ public class PlayerRes {
 
 	// last values sent to the client
 	public float sentMana = -1f;
+	/** Iron's Spellbooks link: its max Mana (0 = not linked) and the Mana value both sides had after the last sync. */
+	public float ironMax = 0f;
+	public float ironSynced = -1f;
 	public float sentStamina = -1f;
 	public float sentMaxMana = -1f;
 	public float sentMaxStamina = -1f;

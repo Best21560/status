@@ -64,7 +64,8 @@ public final class SlayerEngine {
 		if (!is(r) || amount <= 0f || berserk(r, now) || locked(r) || now < r.rageLockUntil) {
 			return;
 		}
-		r.rage = Math.min(MAX_RAGE, r.rage + amount);
+		// Rage is slow to build: every gain event is worth exactly 1 point
+		r.rage = Math.min(MAX_RAGE, r.rage + 1f);
 		r.lastRageGain = now;
 		if (r.rage >= MAX_RAGE) {
 			startBerserk(p, r, now);
@@ -260,11 +261,6 @@ public final class SlayerEngine {
 			p.sendMessage(Text.translatable("orvwindow.msg.no_target"), true);
 			return;
 		}
-		if (r.rage < PURSUIT_RAGE) {
-			p.sendMessage(Text.translatable("orvwindow.msg.no_rage"), true);
-			return;
-		}
-		r.rage -= PURSUIT_RAGE;
 		r.cdEnd[PURSUIT] = now + CD[PURSUIT];
 		r.pTarget = t.getUuid();
 		r.pHits = 5;
@@ -400,10 +396,6 @@ public final class SlayerEngine {
 		if (!ready(p, r, JUDGMENT, now)) {
 			return;
 		}
-		if (r.rage < JUDGMENT_MIN_RAGE) {
-			p.sendMessage(Text.translatable("orvwindow.msg.no_rage"), true);
-			return;
-		}
 		LivingEntity t = findTarget(p, 8.0, 0.3);
 		if (t == null) {
 			t = nearest(p, 6.0);
@@ -412,8 +404,8 @@ public final class SlayerEngine {
 			p.sendMessage(Text.translatable("orvwindow.msg.no_target"), true);
 			return;
 		}
-		float rageMult = 1f + (r.rage - JUDGMENT_MIN_RAGE) / 100f;
-		r.rage = 0f;
+		// skills no longer cost Rage; the more Rage you hold the harder it hits (x1.0 .. x1.5)
+		float rageMult = 1f + r.rage / 200f;
 		r.cdEnd[JUDGMENT] = now + CD[JUDGMENT];
 		r.jTarget = t.getUuid();
 		r.jStart = now;

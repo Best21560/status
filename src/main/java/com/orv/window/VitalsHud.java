@@ -129,7 +129,10 @@ public final class VitalsHud {
 			}
 			bar(ctx, bx, y4, BAR_LEN, rage / 100f, rage / 100f, rtop, rbot, 0);
 			numbers(ctx, tr, bx + BAR_LEN + 5, y4 - 1, bers ? "BERSERK " + (Fx.berserkTicks / 20 + 1) + "s" : (int) rage + "/100");
-			renderSlots(ctx, tr, bx, y4 + 12, rage, nowMs);
+			// skill slots live at the bottom-right of the screen
+			int sw = ctx.getScaledWindowWidth();
+			int sh = ctx.getScaledWindowHeight();
+			renderSlots(ctx, tr, sw - (5 * 26 - 3) - 8, sh - 23 - 8, rage, nowMs);
 		}
 
 		renderTarget(ctx, mc, tr);
@@ -146,7 +149,7 @@ public final class VitalsHud {
 			int x = x0 + i * (size + gap);
 			long left = OrvWindowClient.cdEnd[i] - Fx.clientTick;
 			boolean cd = left > 0;
-			boolean noRage = (i == 1 && rage < 20f) || (i == 4 && rage < 70f);
+			boolean noRage = false;
 			boolean locked = Fx.locked || Fx.berserkTicks > 0;
 			ctx.fill(x - 1, y0 - 1, x + size + 1, y0 + size + 1, METAL_OUT);
 			ctx.fillGradient(x, y0, x + size, y0 + size, i == 4 ? 0xFF3A1210 : 0xFF241A14, 0xFF0C0807);

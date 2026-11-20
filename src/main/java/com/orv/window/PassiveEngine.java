@@ -196,6 +196,9 @@ public final class PassiveEngine {
 	}
 
 	static float maxMana(PlayerRes r) {
+		if (r.ironMax > 0f) {
+			return r.ironMax;
+		}
 		return Classes.mana(r.classId) + (has(r, "mana_pool") ? 20f : 0f);
 	}
 
@@ -935,9 +938,31 @@ public final class PassiveEngine {
 		tickBreaks(now);
 	}
 
+	/**
+	 * Iron's Spellbooks present: its Mana is the shared pool. Whatever our side changed since the last tick
+	 * (spending, Blood Conversion...) is applied on top of Iron's value, then both sides hold the same number.
+	 */
+	private static void syncIronsMana(ServerPlayerEntity p, PlayerRes r) {
+		float max = IronsLink.maxMana(p);
+		float cur = IronsLink.mana(p);
+		if (max <= 0f || cur < 0f) {
+			r.ironMax = 0f;
+			return;
+		}
+		float ourDelta = r.ironSynced < 0f ? 0f : (r.mana - r.ironSynced);
+		float v = Math.max(0f, Math.min(max, cur + ourDelta));
+		if (Math.abs(v - cur) > 0.001f) {
+			IronsLink.setMana(p, v);
+		}
+		r.ironMax = max;
+		r.mana = v;
+		r.ironSynced = v;
+	}
+
 	private static void tickPlayer(MinecraftServer server, ServerPlayerEntity p, long now) {
 		PlayerRes r = res(p.getUuid());
 		Set<String> o = r.owned;
+		syncIronsMana(p, r);
 		float maxMana = maxMana(r);
 		float maxSta = maxStamina(r);
 		float hpFrac = p.getHealth() / Math.max(1f, p.getMaxHealth());
@@ -1036,7 +1061,9 @@ public final class PassiveEngine {
 		if (has(r, "mystic_resonance") && r.nearMagic) {
 			manaMult += 0.20f;
 		}
-		r.mana = Math.min(maxMana, r.mana + (1f / 20f) * Math.max(0.1f, manaMult));
+		if (r.ironMax <= 0f) {
+			r.mana = Math.min(maxMana, r.mana + (1f / 20f) * Math.max(0.1f, manaMult));
+		}
 
 		// ---- overcharge readiness
 		r.overchargeReady = r.overchargeReady
