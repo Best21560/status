@@ -128,7 +128,7 @@ public final class VitalsHud {
 				rbot = pulse ? 0xFFA01410 : 0xFF7A0C0C;
 			}
 			bar(ctx, bx, y4, BAR_LEN, rage / 100f, rage / 100f, rtop, rbot, 0);
-			numbers(ctx, tr, bx + BAR_LEN + 5, y4 - 1, bers ? "BERSERK " + (Fx.berserkTicks / 20 + 1) + "s" : (int) rage + "/100");
+			numbers(ctx, tr, bx + BAR_LEN + 5, y4 - 1, (int) rage + "/100");
 			// skill slots live at the bottom-right of the screen
 			int sw = ctx.getScaledWindowWidth();
 			int sh = ctx.getScaledWindowHeight();

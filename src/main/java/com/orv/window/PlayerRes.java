@@ -164,6 +164,16 @@ public class PlayerRes {
 	public long lastRageGain = 0;
 	public long berserkUntil = 0;
 	public long rageLockUntil = 0;
+	/** Berserk cut-scene: tick it started (0 = none). */
+	public long bIntroStart = 0;
+	/** Fatal Strike (jump slash): airborne flag, start tick, target, last tick of the flight. */
+	public boolean fAir = false;
+	public long fStart = 0;
+	public long fMaxEnd = 0;
+	public UUID fTarget = null;
+	public Vec3d fDest = null;
+	public boolean fFell = false;
+	public double fLastY = 0;
 	/** Cooldown end ticks: 0 Slash, 1 Relentless Pursuit, 2 Counter Hunt, 3 Fatal Strike, 4 Final Judgment. */
 	public final long[] cdEnd = new long[5];
 	public long dashIframeUntil = 0;

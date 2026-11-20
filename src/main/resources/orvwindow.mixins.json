@@ -10,6 +10,7 @@
     "defaultRequire": 0
   },
   "client": [
-    "InGameHudMixin"
+    "InGameHudMixin",
+    "BipedModelMixin"
   ]
 }

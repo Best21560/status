@@ -30,6 +30,12 @@ public final class FxNet {
 	public static final int HEAL_PULSE = 13;
 	public static final int ORB_SHOT = 14;
 	public static final int HALO_BURST = 15;
+	/** Body animation: a = animation id (see PoseClient), b = entity id of the player who plays it. */
+	public static final int ANIM = 16;
+	/** Berserk charge-up (pos = feet): dark embers pulled in, the ring forms. */
+	public static final int CHARGE = 17;
+	/** Light trail that follows a flying player: a = flight seconds, b = entity id. */
+	public static final int LEAP = 18;
 
 	private static PacketByteBuf make(int type, Vec3d pos, Vec3d dir, float a, int b) {
 		PacketByteBuf out = PacketByteBufs.create();
