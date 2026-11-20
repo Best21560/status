@@ -233,6 +233,7 @@ public final class SlayerEngine {
 		Vec3d look = p.getRotationVec(1f);
 		float dmg = base(p) * 1.6f;
 		p.swingHand(Hand.MAIN_HAND, true);
+		EpicLink.play(p, r.slashFlip ? "GREATSWORD_AUTO2" : "GREATSWORD_AUTO1");
 		FxNet.send(w, FxNet.SLASH, eye.add(0, -0.3, 0), look, r.slashFlip ? -32f : 32f, 1);
 		r.slashFlip = !r.slashFlip;
 		for (LivingEntity e : candidates(p, 4.0)) {
@@ -287,6 +288,7 @@ public final class SlayerEngine {
 		boolean last = r.pHits == 1;
 		Vec3d dir = chest(t).subtract(p.getEyePos()).normalize();
 		p.swingHand(Hand.MAIN_HAND, true);
+		EpicLink.play(p, n % 2 == 0 ? "GREATSWORD_AUTO1" : "GREATSWORD_AUTO2");
 		FxNet.send(w, FxNet.SLASH, p.getEyePos().add(0, -0.2, 0), dir, (n % 2 == 0 ? 40f : -40f) + n * 7f, last ? 2 : 0);
 		strike(p, t, base(p) * (last ? 1.1f : 0.75f));
 		if (last) {
@@ -318,6 +320,7 @@ public final class SlayerEngine {
 				return;
 			}
 		}
+		EpicLink.play(p, "GREATSWORD_DASH");
 		FxNet.send(w, FxNet.DASH, from.add(0, 1.0, 0), dest.subtract(from), 0f, 0);
 		float[] yp = angles(dest.add(0, p.getStandingEyeHeight(), 0), chest(t));
 		p.networkHandler.requestTeleport(dest.x, dest.y, dest.z, yp[0], yp[1]);
@@ -359,6 +362,7 @@ public final class SlayerEngine {
 		Vec3d dir = chest(t).subtract(p.getEyePos()).normalize();
 		r.iframeUntil = Math.max(r.iframeUntil, now + 8);
 		p.swingHand(Hand.MAIN_HAND, true);
+		EpicLink.play(p, "GREATSWORD_AUTO2");
 		FxNet.send(w, FxNet.SLASH, p.getEyePos().add(0, -0.2, 0), dir, -55f, 3);
 		strike(p, t, base(p) * 2.2f);
 		t.takeKnockback(0.8, -dir.x, -dir.z);
@@ -384,6 +388,7 @@ public final class SlayerEngine {
 		ServerWorld w = p.getServerWorld();
 		Vec3d dir = chest(t).subtract(p.getEyePos()).normalize();
 		p.swingHand(Hand.MAIN_HAND, true);
+		EpicLink.play(p, "GREATSWORD_AIR_SLASH");
 		FxNet.send(w, FxNet.SLASH, p.getEyePos().add(0, -0.1, 0), dir, 8f, 2);
 		strike(p, t, base(p) * 3.0f);
 		t.takeKnockback(1.1, -dir.x, -dir.z);
@@ -425,6 +430,7 @@ public final class SlayerEngine {
 		r.iframeUntil = Math.max(r.iframeUntil, now + CUTSCENE_MAX);
 		p.setVelocity(Vec3d.ZERO);
 		FxNet.sendTo(p, FxNet.CUTSCENE_START, p.getPos(), Vec3d.ZERO, 0f, 0);
+		EpicLink.play(p, "GREATSWORD_DASH");
 		FxNet.send(w, FxNet.DASH, p.getPos().add(0, 1.0, 0), t.getPos().subtract(p.getPos()), 0f, 1);
 	}
 
@@ -474,6 +480,7 @@ public final class SlayerEngine {
 		if (t == 6) {
 			// grab: the target is held still
 			stun(target, r);
+			EpicLink.play(p, "STEEL_WHIRLWIND");
 			FxNet.send(w, FxNet.GRAB, chest(target), flat, 1f, 0);
 			p.swingHand(Hand.MAIN_HAND, true);
 		}
@@ -514,6 +521,7 @@ public final class SlayerEngine {
 			Vec3d pp = top.add(0.0, 1.2, 0.0);
 			moveTo(p, pp, p.getYaw(), 70f);
 			FxNet.send(w, FxNet.FLASH, chest(target), Vec3d.ZERO, 1f, 0);
+			EpicLink.play(p, "GREATSWORD_AIR_SLASH");
 			FxNet.send(w, FxNet.SLASH, chest(target).add(0, 1.2, 0), dir, 0f, 2);
 			target.setNoGravity(false);
 			target.setVelocity(0, -3.0, 0);
