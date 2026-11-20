@@ -47,6 +47,14 @@ public class OrvWindowClient implements ClientModInitializer {
 	/** My class id ("" = none). classKnown turns true once the server told us. */
 	public static volatile String myClass = "";
 	public static volatile boolean classKnown = false;
+	/** Slayer: Rage 0-100 and the client tick at which each skill is ready again. */
+	public static volatile boolean slayer = false;
+	public static volatile float rage = 0f;
+	public static final long[] cdEnd = new long[5];
+	public static KeyBinding slashKey;
+	public static KeyBinding pursuitKey;
+	public static KeyBinding fatalKey;
+	public static KeyBinding judgmentKey;
 
 	public static KeyBinding bloodKey;
 	public static KeyBinding shieldKey;
@@ -74,8 +82,42 @@ public class OrvWindowClient implements ClientModInitializer {
 		dashKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.orvwindow.dash", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_R, "category.orvwindow"));
 
+		slashKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+				"key.orvwindow.slash", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_Z, "category.orvwindow"));
+		pursuitKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+				"key.orvwindow.pursuit", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_X, "category.orvwindow"));
+		fatalKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+				"key.orvwindow.fatal", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_C, "category.orvwindow"));
+		judgmentKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+				"key.orvwindow.judgment", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_B, "category.orvwindow"));
+
+		ClientTickEvents.START_CLIENT_TICK.register(BerserkClient::suppress);
+
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
-			MoveClient.tick(client);
+			Fx.tick(client);
+			boolean noControl = Fx.locked || Fx.berserkTicks > 0;
+			if (!noControl) {
+				MoveClient.tick(client);
+			}
+			BerserkClient.tick(client);
+			if (slayer && !noControl && client.player != null && client.currentScreen == null) {
+				while (slashKey.wasPressed()) {
+					sendAction(10);
+				}
+				while (pursuitKey.wasPressed()) {
+					sendAction(11);
+				}
+				while (fatalKey.wasPressed()) {
+					sendAction(12);
+				}
+				while (judgmentKey.wasPressed()) {
+					sendAction(13);
+				}
+			} else {
+				while (slashKey.wasPressed() || pursuitKey.wasPressed() || fatalKey.wasPressed() || judgmentKey.wasPressed()) {
+					// drop presses while the player has no control
+				}
+			}
 			if (classKnown && myClass.isEmpty() && client.player != null && client.world != null
 					&& client.currentScreen == null) {
 				client.setScreen(new ClassScreen());
@@ -108,6 +150,21 @@ public class OrvWindowClient implements ClientModInitializer {
 		});
 
 		HudRenderCallback.EVENT.register(VitalsHud::render);
+		HudRenderCallback.EVENT.register(Fx::renderHud);
+
+		ClientPlayNetworking.registerGlobalReceiver(OrvWindowMod.FX, (client, handler, buf, responseSender) -> {
+			int type = buf.readVarInt();
+			double x = buf.readDouble();
+			double y = buf.readDouble();
+			double z = buf.readDouble();
+			float dx = buf.readFloat();
+			float dy = buf.readFloat();
+			float dz = buf.readFloat();
+			float a = buf.readFloat();
+			int b = buf.readVarInt();
+			client.execute(() -> Fx.spawn(type, new net.minecraft.util.math.Vec3d(x, y, z),
+					new net.minecraft.util.math.Vec3d(dx, dy, dz), a, b));
+		});
 
 		ClientPlayNetworking.registerGlobalReceiver(OrvWindowMod.VITALS, (client, handler, buf, responseSender) -> {
 			float m = buf.readFloat();
@@ -203,6 +260,7 @@ public class OrvWindowClient implements ClientModInitializer {
 										})))));
 
 		WorldRenderEvents.LAST.register(StatusRenderer::render);
+		WorldRenderEvents.LAST.register(Fx::render);
 	}
 
 	/** Open the window and release the mouse cursor so it can be used on the window. */

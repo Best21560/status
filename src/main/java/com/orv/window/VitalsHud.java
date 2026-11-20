@@ -116,7 +116,101 @@ public final class VitalsHud {
 		bar(ctx, bx, y3, staLen, sta / maxSta, sta / maxSta, top, bottom, 0);
 		numbers(ctx, tr, bx + staLen + 5, y3 - 1, (int) Math.ceil(sta) + "/" + (int) Math.ceil(maxSta));
 
+		if (OrvWindowClient.slayer) {
+			int y4 = y3 + 11;
+			float rage = OrvWindowClient.rage;
+			boolean bers = Fx.berserkTicks > 0;
+			int rtop = 0xFFE03A2A;
+			int rbot = 0xFF7A0C0C;
+			if (bers || rage >= 85f) {
+				boolean pulse = (nowMs / 120) % 2 == 0;
+				rtop = pulse ? 0xFFFF6A3A : 0xFFE03A2A;
+				rbot = pulse ? 0xFFA01410 : 0xFF7A0C0C;
+			}
+			bar(ctx, bx, y4, BAR_LEN, rage / 100f, rage / 100f, rtop, rbot, 0);
+			numbers(ctx, tr, bx + BAR_LEN + 5, y4 - 1, bers ? "BERSERK " + (Fx.berserkTicks / 20 + 1) + "s" : (int) rage + "/100");
+			renderSlots(ctx, tr, bx, y4 + 12, rage, nowMs);
+		}
+
 		renderTarget(ctx, mc, tr);
+	}
+
+	// ------------------------------------------------------------------ Slayer skill slots
+
+	private static final String[] KEYS = {"Z", "X", "-", "C", "B"};
+
+	private static void renderSlots(DrawContext ctx, TextRenderer tr, int x0, int y0, float rage, long nowMs) {
+		int size = 23;
+		int gap = 3;
+		for (int i = 0; i < 5; i++) {
+			int x = x0 + i * (size + gap);
+			long left = OrvWindowClient.cdEnd[i] - Fx.clientTick;
+			boolean cd = left > 0;
+			boolean noRage = (i == 1 && rage < 20f) || (i == 4 && rage < 70f);
+			boolean locked = Fx.locked || Fx.berserkTicks > 0;
+			ctx.fill(x - 1, y0 - 1, x + size + 1, y0 + size + 1, METAL_OUT);
+			ctx.fillGradient(x, y0, x + size, y0 + size, i == 4 ? 0xFF3A1210 : 0xFF241A14, 0xFF0C0807);
+			ctx.fill(x, y0, x + size, y0 + 1, METAL_LIGHT);
+			ctx.fill(x, y0, x + 1, y0 + size, METAL_MID);
+			ctx.fill(x + size - 1, y0, x + size, y0 + size, METAL_DARK);
+			ctx.fill(x, y0 + size - 1, x + size, y0 + size, METAL_DARK);
+			int col = (cd || noRage || locked) ? 0xFF6A5A4A : (i == 4 ? 0xFFFFC870 : 0xFFFF6A50);
+			glyph(ctx, i, x, y0, col);
+			if (cd) {
+				int h = (int) Math.min(size, Math.round(size * (left / (float) SlayerEngine.CD[i])));
+				ctx.fill(x + 1, y0 + size - h, x + size - 1, y0 + size - 1, 0xAA000000);
+				String t = left >= 20 ? String.valueOf((left + 19) / 20) : String.format("%.1f", left / 20f);
+				int tw = tr.getWidth(t);
+				ctx.drawTextWithShadow(tr, t, x + (size - tw) / 2, y0 + 7, 0xFFFFFFFF);
+			} else if (!noRage && !locked && i != 2) {
+				ctx.fill(x + 1, y0 + size - 2, x + size - 1, y0 + size - 1, 0x80FF6A50);
+			}
+			ctx.getMatrices().push();
+			ctx.getMatrices().translate(x + 2, y0 + 2, 0);
+			ctx.getMatrices().scale(0.6f, 0.6f, 1f);
+			ctx.drawTextWithShadow(tr, i == 2 ? "AUTO" : KEYS[i], 0, 0, NUMBER);
+			ctx.getMatrices().pop();
+		}
+	}
+
+	private static void line(DrawContext ctx, int x0, int y0, int x1, int y1, int col) {
+		int n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
+		for (int k = 0; k <= n; k++) {
+			int px = x0 + (n == 0 ? 0 : (x1 - x0) * k / n);
+			int py = y0 + (n == 0 ? 0 : (y1 - y0) * k / n);
+			ctx.fill(px, py, px + 2, py + 2, col);
+		}
+	}
+
+	private static void glyph(DrawContext ctx, int i, int x, int y, int col) {
+		switch (i) {
+			case 0 -> { // slash: a curved cut
+				line(ctx, x + 4, y + 18, x + 9, y + 10, col);
+				line(ctx, x + 9, y + 10, x + 17, y + 5, col);
+				line(ctx, x + 6, y + 18, x + 12, y + 12, col & 0x80FFFFFF | 0x80000000);
+			}
+			case 1 -> { // pursuit: chevrons
+				for (int k = 0; k < 3; k++) {
+					line(ctx, x + 4 + k * 5, y + 6, x + 8 + k * 5, y + 11, col);
+					line(ctx, x + 8 + k * 5, y + 11, x + 4 + k * 5, y + 16, col);
+				}
+			}
+			case 2 -> { // counter hunt: crossed strokes
+				line(ctx, x + 5, y + 5, x + 17, y + 17, col);
+				line(ctx, x + 17, y + 5, x + 5, y + 17, col);
+			}
+			case 3 -> { // fatal strike: blade down
+				ctx.fill(x + 10, y + 3, x + 13, y + 16, col);
+				ctx.fill(x + 6, y + 15, x + 17, y + 17, col);
+				ctx.fill(x + 10, y + 17, x + 13, y + 20, col);
+			}
+			default -> { // judgment: burst
+				line(ctx, x + 11, y + 3, x + 11, y + 19, col);
+				line(ctx, x + 3, y + 11, x + 19, y + 11, col);
+				line(ctx, x + 5, y + 5, x + 17, y + 17, col);
+				line(ctx, x + 17, y + 5, x + 5, y + 17, col);
+			}
+		}
 	}
 
 	// ------------------------------------------------------------------ enemy plate (name + HP of what you look at)

@@ -223,6 +223,9 @@ public final class PassiveEngine {
 		PlayerRes r = res(p.getUuid());
 		long nowI = nowOf(p);
 		if (nowI < r.iframeUntil && !source.isIn(DamageTypeTags.BYPASSES_INVULNERABILITY)) {
+			if (nowI < r.dashIframeUntil) {
+				SlayerEngine.onDodge(p, r, source.getAttacker(), nowI);
+			}
 			return true; // dash / roll invulnerability
 		}
 		if (r.owned.isEmpty()) {
@@ -240,10 +243,12 @@ public final class PassiveEngine {
 		boolean attackHit = source.getAttacker() != null && (source.getSource() == source.getAttacker() || projectile);
 		if (projectile && has(r, "deflection") && now >= r.deflectIcd && RAND.nextFloat() < 0.15f) {
 			r.deflectIcd = now + 40;
+			SlayerEngine.onDodge(p, r, source.getAttacker(), now);
 			return true;
 		}
 		if (attackHit && has(r, "evasive_instinct") && now >= r.dodgeIcd && RAND.nextFloat() < 0.06f) {
 			r.dodgeIcd = now + 30;
+			SlayerEngine.onDodge(p, r, source.getAttacker(), now);
 			return true;
 		}
 		return false;
@@ -283,7 +288,7 @@ public final class PassiveEngine {
 	private static float attackerBonus(ServerPlayerEntity atk, LivingEntity victim, DamageSource source, float amount, long now) {
 		PlayerRes r = res(atk.getUuid());
 		if (r.owned.isEmpty()) {
-			return amount;
+			return SlayerEngine.berserk(r, now) ? amount * 1.3f : amount;
 		}
 		boolean melee = source.getSource() == atk;
 		boolean ranged = source.getSource() instanceof PersistentProjectileEntity;
@@ -423,6 +428,9 @@ public final class PassiveEngine {
 				bonus += 0.15f;
 			}
 		}
+		if (SlayerEngine.berserk(r, now)) {
+			bonus += 0.30f;
+		}
 		out *= 1f + Math.min(CAP_DAMAGE_BONUS, bonus);
 
 		// ignore part of the armor
@@ -463,6 +471,17 @@ public final class PassiveEngine {
 
 	private static float defenderReduction(ServerPlayerEntity vp, DamageSource source, float amount, long now) {
 		PlayerRes r = res(vp.getUuid());
+		if (SlayerEngine.is(r)) {
+			if (SlayerEngine.berserk(r, now)) {
+				amount *= 0.9f;
+			}
+			int use = vp.getItemUseTime();
+			if (vp.isBlocking() && use >= 5 && use <= 10 && source.getAttacker() != null
+					&& !source.isIn(DamageTypeTags.BYPASSES_SHIELD) && now - r.lastParry > 20) {
+				r.lastParry = now;
+				SlayerEngine.onParry(vp, r, now);
+			}
+		}
 		if (r.owned.isEmpty()) {
 			return amount;
 		}
@@ -573,6 +592,7 @@ public final class PassiveEngine {
 
 		if (victim instanceof ServerPlayerEntity vp) {
 			PlayerRes r = res(vp.getUuid());
+			SlayerEngine.onDamaged(vp, r, a instanceof LivingEntity la ? la : null, amount, now);
 			r.lastDamagedTick = now;
 			r.moveTicks = 0;
 			if (has(r, "quick_reflex") && now >= r.reflexIcd) {
@@ -618,6 +638,9 @@ public final class PassiveEngine {
 
 		if (a instanceof ServerPlayerEntity atk) {
 			PlayerRes r = res(atk.getUuid());
+			if (!inReflect && source.getSource() == atk) {
+				SlayerEngine.onHit(atk, r, now);
+			}
 			if (r.owned.isEmpty() || inReflect) {
 				return;
 			}
@@ -692,6 +715,7 @@ public final class PassiveEngine {
 				}
 				if (has(r, "armor_breaker") && RAND.nextFloat() < 0.12f) {
 					applyArmorBreak(victim, now);
+					SlayerEngine.onArmorBreak(atk, r, now);
 				}
 				if (has(r, "corrosion") && victim.hasStatusEffect(StatusEffects.POISON)) {
 					applyCorrosion(victim, now);
@@ -858,12 +882,19 @@ public final class PassiveEngine {
 		if (entity instanceof ServerPlayerEntity dead) {
 			PlayerRes r = res(dead.getUuid());
 			r.souls /= 2;
+			if (SlayerEngine.is(r)) {
+				SlayerEngine.onLeave(dead);
+				r.rage = 0f;
+				r.berserkUntil = 0;
+				r.pTarget = null;
+			}
 		}
 		Entity a = source.getAttacker();
 		if (!(a instanceof ServerPlayerEntity p)) {
 			return;
 		}
 		PlayerRes r = res(p.getUuid());
+		SlayerEngine.onKill(p, r, entity, nowOf(p));
 		if (r.owned.isEmpty()) {
 			return;
 		}
@@ -1162,6 +1193,9 @@ public final class PassiveEngine {
 			atkSpeed += cls.attackSpeed();
 			clsAttack = cls.attack();
 		}
+		if (SlayerEngine.berserk(r, now)) {
+			speed += 0.12;
+		}
 
 		setMod(p, r, EntityAttributes.GENERIC_ATTACK_DAMAGE, U_ATK, "orv_class_attack", clsAttack, EntityAttributeModifier.Operation.ADDITION);
 		setMod(p, r, EntityAttributes.GENERIC_ARMOR, U_ARMOR, "orv_armor", armor, EntityAttributeModifier.Operation.ADDITION);
@@ -1203,12 +1237,19 @@ public final class PassiveEngine {
 	// ------------------------------------------------------------------ client sync
 
 	private static void syncResources(ServerPlayerEntity p, PlayerRes r, long now, float maxMana, float maxSta) {
+		boolean slayer = SlayerEngine.is(r);
+		int rageI = slayer ? Math.round(r.rage) : 0;
+		int bits = (slayer ? SlayerEngine.cooldownBits(r, now) : 0)
+				| (SlayerEngine.berserk(r, now) ? 1 << 8 : 0) | (SlayerEngine.locked(r) ? 1 << 9 : 0) | (slayer ? 1 << 10 : 0);
+		String atk = (slayer && r.lastAttackerId != null && now - r.lastDamagedTick < 100) ? r.lastAttackerId.toString() : "";
 		boolean changed = Math.abs(r.mana - r.sentMana) >= 0.5f || Math.abs(r.stamina - r.sentStamina) >= 0.5f
-				|| maxMana != r.sentMaxMana || maxSta != r.sentMaxStamina || r.exhausted != r.sentExhausted;
+				|| maxMana != r.sentMaxMana || maxSta != r.sentMaxStamina || r.exhausted != r.sentExhausted
+				|| rageI != r.sentRageI || bits != r.sentBits || !atk.equals(r.sentAtk);
 		if (!changed && now - r.sentAt < 100) {
 			return;
 		}
-		if (changed && now - r.sentAt < 4) {
+		boolean urgent = bits != r.sentBits;
+		if (changed && !urgent && now - r.sentAt < 4) {
 			return;
 		}
 		if (!ServerPlayNetworking.canSend(p, OrvWindowMod.VITALS)) {
@@ -1220,12 +1261,24 @@ public final class PassiveEngine {
 		out.writeFloat(r.stamina);
 		out.writeFloat(maxSta);
 		out.writeBoolean(r.exhausted);
+		// Slayer extras
+		out.writeBoolean(slayer);
+		out.writeFloat(slayer ? r.rage : 0f);
+		out.writeVarInt(SlayerEngine.berserk(r, now) ? (int) (r.berserkUntil - now) : 0);
+		out.writeBoolean(SlayerEngine.locked(r));
+		out.writeString(atk);
+		for (int i = 0; i < r.cdEnd.length; i++) {
+			out.writeVarInt((int) Math.max(0L, r.cdEnd[i] - now));
+		}
 		ServerPlayNetworking.send(p, OrvWindowMod.VITALS, out);
 		r.sentMana = r.mana;
 		r.sentStamina = r.stamina;
 		r.sentMaxMana = maxMana;
 		r.sentMaxStamina = maxSta;
 		r.sentExhausted = r.exhausted;
+		r.sentRageI = rageI;
+		r.sentBits = bits;
+		r.sentAtk = atk;
 		r.sentAt = now;
 	}
 }

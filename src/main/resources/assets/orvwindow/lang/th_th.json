@@ -310,5 +310,15 @@
   "orvwindow.class.rogue.perk": "ว่องไวที่สุด โจมตีเร็ว Stamina สูง",
   "orvwindow.class.wuxia.perk": "สมดุลทุกด้าน มานาและ Stamina สูง",
   "orvwindow.class.slayer.perk": "เลือดและเกราะสูงสุด ดาเมจหนัก",
-  "orvwindow.stat.atkspeed": "ความเร็วโจมตี"
+  "orvwindow.stat.atkspeed": "ความเร็วโจมตี",
+  "key.orvwindow.slash": "Slash (ฟันรุนแรง)",
+  "key.orvwindow.pursuit": "Relentless Pursuit (พุ่งไล่ 5 ครั้ง)",
+  "key.orvwindow.fatal": "Fatal Strike (ฟันคริติคอล)",
+  "key.orvwindow.judgment": "Final Judgment (ต้องการ Rage 70+)",
+  "orvwindow.msg.berserk_on": "BERSERK! คุมตัวละครไม่ได้",
+  "orvwindow.msg.berserk_off": "Berserk สิ้นสุดลง",
+  "orvwindow.msg.cooldown": "สกิลยังคูลดาวน์",
+  "orvwindow.msg.no_rage": "Rage ไม่พอ",
+  "orvwindow.msg.no_stamina": "Stamina ไม่พอ",
+  "orvwindow.msg.no_target": "ไม่มีเป้าหมาย"
 }

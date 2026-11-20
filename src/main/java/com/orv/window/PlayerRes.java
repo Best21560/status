@@ -155,4 +155,33 @@ public class PlayerRes {
 	public Item useItem = null;
 	public int useLeft = 0;
 	public float hpPrev = -1f;
+
+	// ---- Slayer
+	public float rage = 0f;
+	public long lastRageGain = 0;
+	public long berserkUntil = 0;
+	public long rageLockUntil = 0;
+	/** Cooldown end ticks: 0 Slash, 1 Relentless Pursuit, 2 Counter Hunt, 3 Fatal Strike, 4 Final Judgment. */
+	public final long[] cdEnd = new long[5];
+	public long dashIframeUntil = 0;
+	public boolean slashFlip = false;
+	public long lastParry = 0;
+	public UUID pTarget = null;
+	public int pHits = 0;
+	public long pNext = 0;
+	public UUID cTarget = null;
+	public long cAt = 0;
+	// Final Judgment cutscene
+	public UUID jTarget = null;
+	public long jStart = 0;
+	public Vec3d jFrom = null;
+	public Vec3d jBase = null;
+	public double jTop = 5.0;
+	public float jEach = 0f;
+	public float jFinal = 0f;
+	public boolean jAiWas = false;
+	public long jLandAt = -1;
+	public int sentRageI = -1;
+	public int sentBits = -1;
+	public String sentAtk = "";
 }

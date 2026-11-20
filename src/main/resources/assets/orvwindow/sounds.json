@@ -1,8 +1,42 @@
 {
   "window_open": {
-    "sounds": ["orvwindow:window_open"]
+    "sounds": [
+      "orvwindow:window_open"
+    ]
   },
   "window_close": {
-    "sounds": ["orvwindow:window_close"]
+    "sounds": [
+      "orvwindow:window_close"
+    ]
+  },
+  "slash": {
+    "sounds": [
+      "orvwindow:slash"
+    ]
+  },
+  "impact": {
+    "sounds": [
+      "orvwindow:impact"
+    ]
+  },
+  "dash": {
+    "sounds": [
+      "orvwindow:dash"
+    ]
+  },
+  "parry": {
+    "sounds": [
+      "orvwindow:parry"
+    ]
+  },
+  "berserk": {
+    "sounds": [
+      "orvwindow:berserk"
+    ]
+  },
+  "boom": {
+    "sounds": [
+      "orvwindow:boom"
+    ]
   }
 }

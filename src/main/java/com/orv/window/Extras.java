@@ -57,6 +57,7 @@ public final class Extras {
 	public static void action(ServerPlayerEntity p, PlayerRes r, int id, long now) {
 		switch (id) {
 			case 6 -> soulEater(p, r, now);
+			case 10, 11, 12, 13 -> SlayerEngine.action(p, r, id, now);
 			case 7 -> dash(p, r, now);
 			case 8 -> {
 				if (PassiveEngine.has(r, "double_jump")) {
@@ -109,6 +110,7 @@ public final class Extras {
 		float cd = 40f * (PassiveEngine.has(r, "dash_master") ? 0.8f : 1f);
 		r.dashIcd = now + Math.round(cd);
 		r.iframeUntil = now + 5 + (PassiveEngine.has(r, "combat_roll") ? 2 : 0);
+		r.dashIframeUntil = r.iframeUntil;
 		r.lastSprintTick = now; // no stamina regen right after a dash
 	}
 
@@ -160,6 +162,8 @@ public final class Extras {
 	// ------------------------------------------------------------------ per tick
 
 	public static void tick(ServerPlayerEntity p, PlayerRes r, long now) {
+		SlayerEngine.tick(p, r, now);
+
 		// Weapon Mastery: give back the durability that the hit just cost
 		if (r.refundStack != null) {
 			ItemStack s = r.refundStack;

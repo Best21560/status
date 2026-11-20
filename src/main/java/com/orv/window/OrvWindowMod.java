@@ -41,6 +41,8 @@ public class OrvWindowMod implements ModInitializer {
 	/** client -> server: the class the player picked. */
 	public static final Identifier CLASS_PICK = new Identifier("orvwindow", "class_pick");
 	/** client -> server: a key was pressed (see PassiveEngine.action / Extras.action). */
+	/** server -> client: a visual effect (see FxNet / Fx). */
+	public static final Identifier FX = new Identifier("orvwindow", "fx");
 	public static final Identifier ACTION = new Identifier("orvwindow", "action");
 
 	private static final Set<UUID> OPEN = ConcurrentHashMap.newKeySet();
@@ -132,6 +134,7 @@ public class OrvWindowMod implements ModInitializer {
 
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
 			UUID id = handler.player.getUuid();
+			SlayerEngine.onLeave(handler.player);
 			PassiveEngine.clear(id);
 			if (OPEN.remove(id)) {
 				broadcast(server, id, false);
