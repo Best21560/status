@@ -53,12 +53,8 @@ public final class Extras {
 
 	// ------------------------------------------------------------------ key actions from the client
 
-	/** 2..5 spells, 6 Soul Eater, 7 dash / roll, 8 double jump (cost), 9 wall run (cost). */
+	/** 6 Soul Eater, 7 dash / roll, 8 double jump (cost), 9 wall run (cost). */
 	public static void action(ServerPlayerEntity p, PlayerRes r, int id, long now) {
-		if (id >= 2 && id <= 5) {
-			Spells.request(p, id - 2);
-			return;
-		}
 		switch (id) {
 			case 6 -> soulEater(p, r, now);
 			case 7 -> dash(p, r, now);
@@ -164,8 +160,6 @@ public final class Extras {
 	// ------------------------------------------------------------------ per tick
 
 	public static void tick(ServerPlayerEntity p, PlayerRes r, long now) {
-		Spells.tick(p, r, now);
-
 		// Weapon Mastery: give back the durability that the hit just cost
 		if (r.refundStack != null) {
 			ItemStack s = r.refundStack;

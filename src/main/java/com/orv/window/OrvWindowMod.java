@@ -1,6 +1,8 @@
 package com.orv.window;
 
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.arguments.StringArgumentType;
+import net.minecraft.command.CommandSource;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.fabricmc.api.ModInitializer;
@@ -34,6 +36,11 @@ public class OrvWindowMod implements ModInitializer {
 	/** server -> client: Mana, max Mana, Stamina, max Stamina, exhausted. */
 	public static final Identifier VITALS = new Identifier("orvwindow", "vitals");
 	/** client -> server: a key was pressed (0 = Blood Conversion, 1 = Mana Shield toggle). */
+	/** server -> client: the chosen class id ("" = not chosen yet, the client opens the class screen). */
+	public static final Identifier CLASS = new Identifier("orvwindow", "class");
+	/** client -> server: the class the player picked. */
+	public static final Identifier CLASS_PICK = new Identifier("orvwindow", "class_pick");
+	/** client -> server: a key was pressed (see PassiveEngine.action / Extras.action). */
 	public static final Identifier ACTION = new Identifier("orvwindow", "action");
 
 	private static final Set<UUID> OPEN = ConcurrentHashMap.newKeySet();
@@ -45,6 +52,20 @@ public class OrvWindowMod implements ModInitializer {
 		ServerPlayNetworking.registerGlobalReceiver(ACTION, (server, player, handler, buf, responseSender) -> {
 			int id = buf.readVarInt();
 			server.execute(() -> PassiveEngine.action(player, id));
+		});
+
+		ServerPlayNetworking.registerGlobalReceiver(CLASS_PICK, (server, player, handler, buf, responseSender) -> {
+			String cls = buf.readString(32);
+			server.execute(() -> {
+				SkillState st = SkillState.get(server);
+				// a class can only be picked once (ops can change it with /orvclass)
+				if (!Classes.exists(cls) || !st.classOf(player.getUuid()).isEmpty()) {
+					return;
+				}
+				st.setClass(player.getUuid(), cls);
+				PassiveEngine.setClass(player.getUuid(), cls, true);
+				sendClass(player, cls);
+			});
 		});
 
 		ServerPlayNetworking.registerGlobalReceiver(STATE, (server, player, handler, buf, responseSender) -> {
@@ -102,7 +123,11 @@ public class OrvWindowMod implements ModInitializer {
 			for (UUID id : OPEN) {
 				send(handler.player, id, true);
 			}
-			sendSkills(handler.player, SkillState.get(server));
+			SkillState st = SkillState.get(server);
+			sendSkills(handler.player, st);
+			String cls = st.classOf(handler.player.getUuid());
+			PassiveEngine.setClass(handler.player.getUuid(), cls, false);
+			sendClass(handler.player, cls);
 		});
 
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
@@ -112,6 +137,20 @@ public class OrvWindowMod implements ModInitializer {
 				broadcast(server, id, false);
 			}
 		});
+
+		// /orvclass set <players> <class>   /orvclass reset <players>   (ops only)
+		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
+				dispatcher.register(CommandManager.literal("orvclass")
+						.requires(src -> src.hasPermissionLevel(2))
+						.then(CommandManager.literal("set")
+								.then(CommandManager.argument("players", EntityArgumentType.players())
+										.then(CommandManager.argument("class", StringArgumentType.word())
+												.suggests((c, b) -> CommandSource.suggestMatching(
+														Classes.ALL.stream().map(Classes.Def::id).toList(), b))
+												.executes(ctx -> changeClass(ctx, StringArgumentType.getString(ctx, "class"))))))
+						.then(CommandManager.literal("reset")
+								.then(CommandManager.argument("players", EntityArgumentType.players())
+										.executes(ctx -> changeClass(ctx, ""))))));
 
 		// /skillpoints add <players> <amount>   /skillpoints set <players> <amount>   (ops only)
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
@@ -125,6 +164,29 @@ public class OrvWindowMod implements ModInitializer {
 								.then(CommandManager.argument("players", EntityArgumentType.players())
 										.then(CommandManager.argument("amount", IntegerArgumentType.integer(0, 100000))
 												.executes(ctx -> changePoints(ctx, true)))))));
+	}
+
+	private static int changeClass(CommandContext<ServerCommandSource> ctx, String cls) throws CommandSyntaxException {
+		if (!cls.isEmpty() && !Classes.exists(cls)) {
+			ctx.getSource().sendError(Text.translatable("orvwindow.cmd.class_unknown", cls));
+			return 0;
+		}
+		Collection<ServerPlayerEntity> targets = EntityArgumentType.getPlayers(ctx, "players");
+		SkillState st = SkillState.get(ctx.getSource().getServer());
+		for (ServerPlayerEntity p : targets) {
+			st.setClass(p.getUuid(), cls);
+			PassiveEngine.setClass(p.getUuid(), cls, !cls.isEmpty());
+			sendClass(p, cls);
+		}
+		int count = targets.size();
+		ctx.getSource().sendFeedback(() -> Text.translatable("orvwindow.cmd.class_changed", count), true);
+		return count;
+	}
+
+	private static void sendClass(ServerPlayerEntity player, String cls) {
+		PacketByteBuf out = PacketByteBufs.create();
+		out.writeString(cls);
+		ServerPlayNetworking.send(player, CLASS, out);
 	}
 
 	private static int changePoints(CommandContext<ServerCommandSource> ctx, boolean set) throws CommandSyntaxException {

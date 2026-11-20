@@ -98,7 +98,9 @@ public class PlayerData {
 		List<Text> l = new ArrayList<>();
 		l.add(Text.translatable("orvwindow.line.name", displayName()));
 		l.add(Text.translatable("orvwindow.line.race"));
-		l.add(Text.translatable("orvwindow.line.class"));
+		String cid = OrvWindowClient.myClass;
+		l.add(Text.translatable("orvwindow.line.class",
+				cid.isEmpty() ? Text.literal("-") : Text.translatable("orvwindow.class." + cid)));
 		l.add(Text.translatable("orvwindow.line.level", LEVEL, EXP_PERCENT));
 		l.add(Text.translatable("orvwindow.line.unique")); // must stay at index UNIQUE_ROW
 

@@ -15,6 +15,9 @@ import java.util.UUID;
 /** Runtime (not saved) state of one player: Mana, Stamina, timers and counters used by passives. */
 public class PlayerRes {
 	public volatile Set<String> owned = Set.of();
+	/** Chosen class id ("" = none yet). */
+	public volatile String classId = "";
+	public boolean fullHeal = false;
 
 	// resources
 	public float mana = 100f;

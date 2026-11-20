@@ -77,6 +77,7 @@ public final class PassiveEngine {
 	private static final UUID U_LUCK = UUID.fromString("5b1f0c3a-0000-4000-8000-0000000000a6");
 	private static final UUID U_BREAK = UUID.fromString("5b1f0c3a-0000-4000-8000-0000000000a7");
 	private static final UUID U_CORR = UUID.fromString("5b1f0c3a-0000-4000-8000-0000000000a8");
+	private static final UUID U_ATK = UUID.fromString("5b1f0c3a-0000-4000-8000-0000000000a9");
 
 	// ---- caps (see design doc) ----
 	private static final float CAP_DAMAGE_BONUS = 0.50f;
@@ -134,6 +135,18 @@ public final class PassiveEngine {
 		res(id).owned = Set.copyOf(owned);
 	}
 
+	/** Sets the class of a player (base stats are applied by applyAttributes). */
+	public static void setClass(UUID id, String cls, boolean healUp) {
+		PlayerRes r = res(id);
+		r.classId = cls == null ? "" : cls;
+		r.lastAttr.clear();
+		if (healUp) {
+			r.fullHeal = true;
+			r.mana = maxMana(r);
+			r.stamina = maxStamina(r);
+		}
+	}
+
 	public static void forget(UUID id) {
 		RES.remove(id);
 	}
@@ -183,11 +196,11 @@ public final class PassiveEngine {
 	}
 
 	static float maxMana(PlayerRes r) {
-		return 100f + (has(r, "mana_pool") ? 20f : 0f);
+		return Classes.mana(r.classId) + (has(r, "mana_pool") ? 20f : 0f);
 	}
 
 	static float maxStamina(PlayerRes r) {
-		return 100f + (has(r, "stamina_mastery") ? 20f : 0f);
+		return Classes.stamina(r.classId) + (has(r, "stamina_mastery") ? 20f : 0f);
 	}
 
 	// ------------------------------------------------------------------ attack strength
@@ -1139,12 +1152,28 @@ public final class PassiveEngine {
 		}
 		kb = Math.min(1.0, kb);
 
+		// class base stats (not part of the passive caps)
+		Classes.Def cls = Classes.get(r.classId);
+		double clsAttack = 0;
+		if (cls != null) {
+			armor += cls.armor();
+			maxHp += cls.hp();
+			speed += cls.speed();
+			atkSpeed += cls.attackSpeed();
+			clsAttack = cls.attack();
+		}
+
+		setMod(p, r, EntityAttributes.GENERIC_ATTACK_DAMAGE, U_ATK, "orv_class_attack", clsAttack, EntityAttributeModifier.Operation.ADDITION);
 		setMod(p, r, EntityAttributes.GENERIC_ARMOR, U_ARMOR, "orv_armor", armor, EntityAttributeModifier.Operation.ADDITION);
 		setMod(p, r, EntityAttributes.GENERIC_MAX_HEALTH, U_HP, "orv_hp", maxHp, EntityAttributeModifier.Operation.ADDITION);
 		setMod(p, r, EntityAttributes.GENERIC_MOVEMENT_SPEED, U_SPEED, "orv_speed", speed, EntityAttributeModifier.Operation.MULTIPLY_TOTAL);
 		setMod(p, r, EntityAttributes.GENERIC_ATTACK_SPEED, U_ATKSPD, "orv_atkspd", atkSpeed, EntityAttributeModifier.Operation.MULTIPLY_TOTAL);
 		setMod(p, r, EntityAttributes.GENERIC_KNOCKBACK_RESISTANCE, U_KB, "orv_kb", kb, EntityAttributeModifier.Operation.ADDITION);
 
+		if (r.fullHeal) {
+			r.fullHeal = false;
+			p.setHealth(p.getMaxHealth());
+		}
 		if (p.getHealth() > p.getMaxHealth()) {
 			p.setHealth(p.getMaxHealth());
 		}

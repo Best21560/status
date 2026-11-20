@@ -44,10 +44,12 @@ public class OrvWindowClient implements ClientModInitializer {
 	public static volatile float stamina = 100f;
 	public static volatile float maxStamina = 100f;
 	public static volatile boolean exhausted = false;
+	/** My class id ("" = none). classKnown turns true once the server told us. */
+	public static volatile String myClass = "";
+	public static volatile boolean classKnown = false;
 
 	public static KeyBinding bloodKey;
 	public static KeyBinding shieldKey;
-	public static final KeyBinding[] SPELL_KEYS = new KeyBinding[4];
 	public static KeyBinding soulKey;
 	public static KeyBinding dashKey;
 
@@ -67,12 +69,6 @@ public class OrvWindowClient implements ClientModInitializer {
 		shieldKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.orvwindow.mana_shield", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_G, "category.orvwindow"));
 
-		int[] spellGlfw = {GLFW.GLFW_KEY_Z, GLFW.GLFW_KEY_X, GLFW.GLFW_KEY_C, GLFW.GLFW_KEY_B};
-		String[] spellNames = {"arcane", "fire", "frost", "thunder"};
-		for (int i = 0; i < 4; i++) {
-			SPELL_KEYS[i] = KeyBindingHelper.registerKeyBinding(new KeyBinding(
-					"key.orvwindow.spell_" + spellNames[i], InputUtil.Type.KEYSYM, spellGlfw[i], "category.orvwindow"));
-		}
 		soulKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.orvwindow.soul_eater", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_N, "category.orvwindow"));
 		dashKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
@@ -80,12 +76,9 @@ public class OrvWindowClient implements ClientModInitializer {
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			MoveClient.tick(client);
-			for (int i = 0; i < 4; i++) {
-				while (SPELL_KEYS[i].wasPressed()) {
-					if (client.player != null && client.currentScreen == null) {
-						sendAction(2 + i);
-					}
-				}
+			if (classKnown && myClass.isEmpty() && client.player != null && client.world != null
+					&& client.currentScreen == null) {
+				client.setScreen(new ClassScreen());
 			}
 			while (soulKey.wasPressed()) {
 				if (client.player != null && client.currentScreen == null) {
@@ -128,6 +121,14 @@ public class OrvWindowClient implements ClientModInitializer {
 				stamina = st;
 				maxStamina = ms;
 				exhausted = ex;
+			});
+		});
+
+		ClientPlayNetworking.registerGlobalReceiver(OrvWindowMod.CLASS, (client, handler, buf, responseSender) -> {
+			String cls = buf.readString(32);
+			client.execute(() -> {
+				myClass = cls;
+				classKnown = true;
 			});
 		});
 
@@ -181,6 +182,8 @@ public class OrvWindowClient implements ClientModInitializer {
 			stamina = 100f;
 			maxStamina = 100f;
 			exhausted = false;
+			myClass = "";
+			classKnown = false;
 		});
 
 		// /status name <ชื่อ>
@@ -240,6 +243,14 @@ public class OrvWindowClient implements ClientModInitializer {
 			PacketByteBuf buf = PacketByteBufs.create();
 			buf.writeVarInt(id);
 			ClientPlayNetworking.send(OrvWindowMod.ACTION, buf);
+		}
+	}
+
+	public static void sendClassPick(String id) {
+		if (ClientPlayNetworking.canSend(OrvWindowMod.CLASS_PICK)) {
+			PacketByteBuf buf = PacketByteBufs.create();
+			buf.writeString(id);
+			ClientPlayNetworking.send(OrvWindowMod.CLASS_PICK, buf);
 		}
 	}
 

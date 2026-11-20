@@ -23,7 +23,7 @@ public final class Passives {
 	}
 
 	/** Category keys, in tab order. Names live in the lang files: orvwindow.cat.<key> */
-	public static final List<String> CATEGORIES = List.of("offense", "defense", "movement", "element", "energy", "recovery", "magic", "hunter");
+	public static final List<String> CATEGORIES = List.of("offense", "defense", "movement", "element", "energy", "recovery", "hunter");
 
 	public static final List<Def> ALL = List.of(
 			new Def("power_strike", "Power Strike", "offense", 1),
@@ -89,7 +89,6 @@ public final class Passives {
 			new Def("ashen_skin", "Ashen Skin", "element", 1),
 			new Def("frozen_heart", "Frozen Heart", "element", 2),
 			new Def("absolute_zero", "Absolute Zero", "element", 3),
-			new Def("glacial_armor", "Glacial Armor", "element", 2),
 			new Def("thunder_core", "Thunder Core", "element", 2),
 			new Def("chain_lightning", "Chain Lightning", "element", 3),
 			new Def("static_charge", "Static Charge", "element", 2),
@@ -106,18 +105,15 @@ public final class Passives {
 			new Def("elemental_harmony", "Elemental Harmony", "element", 3),
 			new Def("mana_flow", "Mana Flow", "energy", 2),
 			new Def("mana_pool", "Mana Pool", "energy", 2),
-			new Def("arcane_efficiency", "Arcane Efficiency", "energy", 2),
 			new Def("blood_conversion", "Blood Conversion", "energy", 3),
 			new Def("energy_absorption", "Energy Absorption", "energy", 2),
 			new Def("stamina_mastery", "Stamina Mastery", "energy", 2),
 			new Def("second_wind", "Second Wind", "energy", 3),
-			new Def("overflow", "Overflow", "energy", 3),
 			new Def("conservation", "Conservation", "energy", 3),
 			new Def("soul_collector", "Soul Collector", "energy", 2),
 			new Def("soul_eater", "Soul Eater", "energy", 3),
 			new Def("battle_focus", "Battle Focus", "energy", 2),
 			new Def("overcharge", "Overcharge", "energy", 3),
-			new Def("efficient_casting", "Efficient Casting", "energy", 2),
 			new Def("arcane_recovery", "Arcane Recovery", "energy", 2),
 			new Def("vampirism", "Vampirism", "recovery", 3),
 			new Def("blood_harvest", "Blood Harvest", "recovery", 2),
@@ -131,21 +127,7 @@ public final class Passives {
 			new Def("natural_healing", "Natural Healing", "recovery", 2),
 			new Def("purification", "Purification", "recovery", 3),
 			new Def("vitality_surge", "Vitality Surge", "recovery", 3),
-			new Def("arcane_mastery", "Arcane Mastery", "magic", 2),
-			new Def("spell_amplifier", "Spell Amplifier", "magic", 3),
-			new Def("spell_echo", "Spell Echo", "magic", 4),
-			new Def("quick_incantation", "Quick Incantation", "magic", 2),
-			new Def("mystic_sight", "Mystic Sight", "magic", 1),
-			new Def("rune_master", "Rune Master", "magic", 2),
-			new Def("spell_weaver", "Spell Weaver", "magic", 3),
-			new Def("mana_shield", "Mana Shield", "magic", 3),
-			new Def("magic_penetration", "Magic Penetration", "magic", 2),
-			new Def("forbidden_knowledge", "Forbidden Knowledge", "magic", 4),
-			new Def("mystic_resonance", "Mystic Resonance", "magic", 2),
-			new Def("spell_absorption", "Spell Absorption", "magic", 3),
-			new Def("dual_casting", "Dual Casting", "magic", 3),
-			new Def("ancient_bloodline", "Ancient Bloodline", "magic", 3),
-			new Def("mana_manipulation", "Mana Manipulation", "magic", 2),
+			new Def("mana_shield", "Mana Shield", "energy", 3),
 			new Def("keen_eyes", "Keen Eyes", "hunter", 1),
 			new Def("predators_instinct", "Predator's Instinct", "hunter", 2),
 			new Def("monster_hunter", "Monster Hunter", "hunter", 2),
@@ -164,10 +146,10 @@ public final class Passives {
 	);
 
 	/** Passives that work in the game now (see PassiveEngine). */
-	private static final java.util.Set<String> ACTIVE = java.util.Set.of("power_strike", "heavy_impact", "critical_instinct", "fatal_blow", "armor_breaker", "executioner", "backstabber", "combo_master", "first_blood", "counter_attack", "piercing_force", "weapon_mastery", "berserker", "bloodlust", "unstoppable", "predator", "ruthless", "dual_wielder", "sniper_instinct", "adrenaline_rush", "iron_body", "magic_barrier", "thick_skin", "last_stand", "second_chance", "regeneration", "toughness", "fortress", "evasive_instinct", "quick_reflex", "deflection", "tenacity", "unyielding", "elemental_resistance", "death_ward", "guardian_spirit", "pain_suppression", "steadfast", "reflective_armor", "adaptation", "swift_feet", "fleet_footed", "double_jump", "air_control", "lightweight", "wall_runner", "silent_step", "shadow_walker", "dash_master", "combat_roll", "acrobat", "water_strider", "climber", "momentum", "hunters_pursuit", "escape_artist", "gravity_defier", "swift_recovery", "inferno_soul", "burning_blood", "ashen_skin", "frozen_heart", "absolute_zero", "glacial_armor", "thunder_core", "chain_lightning", "static_charge", "venom_blood", "toxic_touch", "corrosion", "wind_soul", "gale_force", "earth_heart", "natures_blessing", "holy_light", "dark_embrace", "void_resonance", "elemental_harmony", "mana_flow", "mana_pool", "arcane_efficiency", "blood_conversion", "energy_absorption", "stamina_mastery", "second_wind", "overflow", "conservation", "soul_collector", "soul_eater", "battle_focus", "overcharge", "efficient_casting", "arcane_recovery", "vampirism", "blood_harvest", "soul_drain", "rejuvenation", "combat_medic", "desperate_recovery", "life_bond", "overheal", "blood_pact", "natural_healing", "purification", "vitality_surge", "arcane_mastery", "spell_amplifier", "spell_echo", "quick_incantation", "mystic_sight", "rune_master", "spell_weaver", "mana_shield", "magic_penetration", "forbidden_knowledge", "mystic_resonance", "spell_absorption", "dual_casting", "ancient_bloodline", "keen_eyes", "predators_instinct", "monster_hunter", "beast_slayer", "weak_point_detection", "ambusher", "shadow_meld", "marked_prey", "blood_tracker", "trap_expert", "survival_instinct", "hunters_trophy", "killing_rhythm", "night_predator");
+	private static final java.util.Set<String> ACTIVE = java.util.Set.of("power_strike", "heavy_impact", "critical_instinct", "fatal_blow", "armor_breaker", "executioner", "backstabber", "combo_master", "first_blood", "counter_attack", "piercing_force", "weapon_mastery", "berserker", "bloodlust", "unstoppable", "predator", "ruthless", "dual_wielder", "sniper_instinct", "adrenaline_rush", "iron_body", "magic_barrier", "thick_skin", "last_stand", "second_chance", "regeneration", "toughness", "fortress", "evasive_instinct", "quick_reflex", "deflection", "tenacity", "unyielding", "elemental_resistance", "death_ward", "guardian_spirit", "pain_suppression", "steadfast", "reflective_armor", "adaptation", "swift_feet", "fleet_footed", "double_jump", "air_control", "lightweight", "wall_runner", "silent_step", "shadow_walker", "dash_master", "combat_roll", "acrobat", "water_strider", "climber", "momentum", "hunters_pursuit", "escape_artist", "gravity_defier", "swift_recovery", "inferno_soul", "burning_blood", "ashen_skin", "frozen_heart", "absolute_zero", "thunder_core", "chain_lightning", "static_charge", "venom_blood", "toxic_touch", "corrosion", "wind_soul", "gale_force", "earth_heart", "natures_blessing", "holy_light", "dark_embrace", "void_resonance", "elemental_harmony", "mana_flow", "mana_pool", "blood_conversion", "energy_absorption", "stamina_mastery", "second_wind", "conservation", "soul_collector", "soul_eater", "battle_focus", "overcharge", "arcane_recovery", "vampirism", "blood_harvest", "soul_drain", "rejuvenation", "combat_medic", "desperate_recovery", "life_bond", "overheal", "blood_pact", "natural_healing", "purification", "vitality_surge", "mana_shield", "keen_eyes", "predators_instinct", "monster_hunter", "beast_slayer", "weak_point_detection", "ambusher", "shadow_meld", "silent_killer", "marked_prey", "blood_tracker", "trap_expert", "survival_instinct", "hunters_trophy", "killing_rhythm", "night_predator");
 
 	/** Passives that work only in part (some of their effect is still missing). */
-	private static final java.util.Set<String> PARTIAL = java.util.Set.of("silent_killer", "mana_manipulation");
+	private static final java.util.Set<String> PARTIAL = java.util.Set.of("silent_killer");
 
 	/** 2 = works, 1 = works in part, 0 = not working yet (needs a system that does not exist yet). */
 	public static int status(String id) {
