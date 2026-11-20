@@ -52,6 +52,7 @@ public class OrvWindowMod implements ModInitializer {
 	@Override
 	public void onInitialize() {
 		PassiveEngine.init();
+		ModItems.register();
 
 		ServerPlayNetworking.registerGlobalReceiver(ACTION, (server, player, handler, buf, responseSender) -> {
 			int id = buf.readVarInt();
@@ -143,6 +144,17 @@ public class OrvWindowMod implements ModInitializer {
 				broadcast(server, id, false);
 			}
 		});
+
+		// /orvpotion <tier 1-4>   gives yourself a recovery potion (ops only)
+		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
+				dispatcher.register(CommandManager.literal("orvpotion")
+						.requires(src -> src.hasPermissionLevel(2))
+						.then(CommandManager.argument("tier", com.mojang.brigadier.arguments.IntegerArgumentType.integer(1, 4))
+								.executes(ctx -> {
+									int tier = com.mojang.brigadier.arguments.IntegerArgumentType.getInteger(ctx, "tier");
+									ctx.getSource().getPlayerOrThrow().giveItemStack(new net.minecraft.item.ItemStack(ModItems.POTIONS[tier - 1], 4));
+									return 1;
+								}))));
 
 		// /orvclass set <players> <class>   /orvclass reset <players>   (ops only)
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->

@@ -16,4 +16,11 @@ public abstract class InGameHudMixin {
 								float maxHealth, int lastHealth, int health, int absorption, boolean blinking, CallbackInfo ci) {
 		ci.cancel();
 	}
+
+	/** There is no hunger in this mod, so the whole vanilla status row goes (armor and air are redrawn by VitalsHud). */
+	@Inject(method = "renderStatusBars", at = @At("HEAD"), cancellable = true)
+	private void orv$hideStatusBars(DrawContext context, CallbackInfo ci) {
+		com.orv.window.VitalsHud.statusBarsHidden = true;
+		ci.cancel();
+	}
 }

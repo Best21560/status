@@ -165,6 +165,7 @@ public final class Extras {
 	public static void tick(ServerPlayerEntity p, PlayerRes r, long now) {
 		SlayerEngine.tick(p, r, now);
 		LightEngine.tick(p, r, now);
+		Vitality.tick(p, r, now);
 
 		// Weapon Mastery: give back the durability that the hit just cost
 		if (r.refundStack != null) {

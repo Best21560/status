@@ -7,19 +7,15 @@ public final class LightGeo {
 	private LightGeo() {
 	}
 
-	/** Orb i (0..7) hangs behind the caster like a pair of wings: two rows of four. t is in seconds. */
+	/** Orb i (0..7) circles the caster: two rings of four at different heights, turning in opposite directions. t is in seconds. */
 	public static Vec3d orbPos(Vec3d base, float yawDeg, int i, double t) {
-		double yaw = Math.toRadians(yawDeg);
-		double bx = Math.sin(yaw);
-		double bz = -Math.cos(yaw);
-		double rx = -Math.cos(yaw);
-		double rz = -Math.sin(yaw);
 		int row = i / 4;
 		int col = i % 4;
-		double lat = (col - 1.5) * (row == 0 ? 1.15 : 0.85);
-		double y = (row == 0 ? 2.15 : 1.45) + 0.08 * Math.sin(t * 2.0 + i);
-		double back = 1.25 + row * 0.25;
-		return new Vec3d(base.x + bx * back + rx * lat, base.y + y, base.z + bz * back + rz * lat);
+		double dir = row == 0 ? 1.0 : -1.0;
+		double a = t * 1.1 * dir + col * Math.PI / 2.0 + row * Math.PI / 4.0;
+		double rad = row == 0 ? 2.1 : 1.7;
+		double y = (row == 0 ? 1.7 : 1.0) + 0.1 * Math.sin(t * 2.0 + i);
+		return new Vec3d(base.x + Math.cos(a) * rad, base.y + y, base.z + Math.sin(a) * rad);
 	}
 
 	/** The four free-flying orbs of the Seraph passive: a wide circle (radius 10) around the caster. */

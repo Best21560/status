@@ -321,5 +321,10 @@
   "orvwindow.msg.no_rage": "Rage ไม่พอ",
   "orvwindow.msg.no_stamina": "Stamina ไม่พอ",
   "orvwindow.msg.no_target": "ไม่มีเป้าหมาย",
-  "orvwindow.msg.no_heal": "ต้องมี Heal 200% ขึ้นไป"
+  "orvwindow.msg.no_heal": "ต้องมี Heal 200% ขึ้นไป",
+  "item.orvwindow.recovery_potion_1": "Minor Recovery Potion",
+  "item.orvwindow.recovery_potion_2": "Recovery Potion",
+  "item.orvwindow.recovery_potion_3": "Greater Recovery Potion",
+  "item.orvwindow.recovery_potion_4": "Supreme Recovery Potion",
+  "orvwindow.msg.potion": "ยาฟื้นฟูขั้น %s: ฮีล %s%% ต่อวินาที นาน %s วินาที"
 }

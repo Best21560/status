@@ -135,6 +135,7 @@ public final class VitalsHud {
 			renderSlots(ctx, tr, sw - (5 * 26 - 3) - 8, sh - 23 - 8, rage, nowMs);
 		}
 
+		renderArmorAir(ctx, mc);
 		if (OrvWindowClient.myClass.equals("lightbender")) {
 			LightClient.renderHud(ctx, tr);
 		}
@@ -143,6 +144,36 @@ public final class VitalsHud {
 	}
 
 	// ------------------------------------------------------------------ Slayer skill slots
+
+	/** Set by InGameHudMixin once the vanilla health/hunger row is hidden; then armor and air are drawn here. */
+	public static boolean statusBarsHidden = false;
+	private static final net.minecraft.util.Identifier ICONS = new net.minecraft.util.Identifier("textures/gui/icons.png");
+
+	private static void renderArmorAir(DrawContext ctx, net.minecraft.client.MinecraftClient mc) {
+		if (!statusBarsHidden || mc.player == null || mc.interactionManager == null || !mc.interactionManager.hasStatusBars()) {
+			return;
+		}
+		int sw = ctx.getScaledWindowWidth();
+		int sh = ctx.getScaledWindowHeight();
+		int armor = mc.player.getArmor();
+		if (armor > 0) {
+			for (int i = 0; i < 10; i++) {
+				int x = sw / 2 - 91 + i * 8;
+				int u = armor > i * 2 + 1 ? 34 : (armor == i * 2 + 1 ? 25 : 16);
+				ctx.drawTexture(ICONS, x, sh - 39, u, 9, 9, 9);
+			}
+		}
+		int max = mc.player.getMaxAir();
+		int air = mc.player.getAir();
+		if (mc.player.isSubmergedIn(net.minecraft.registry.tag.FluidTags.WATER) || air < max) {
+			int full = (int) Math.ceil((air - 2) * 10.0 / max);
+			int all = (int) Math.ceil(air * 10.0 / max);
+			for (int i = 0; i < all; i++) {
+				int x = sw / 2 + 91 - i * 8 - 9;
+				ctx.drawTexture(ICONS, x, sh - 39, i < full ? 16 : 25, 18, 9, 9);
+			}
+		}
+	}
 
 	private static final String[] KEYS = {"Z", "X", "-", "C", "B"};
 

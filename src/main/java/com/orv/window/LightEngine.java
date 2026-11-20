@@ -174,7 +174,7 @@ public final class LightEngine {
 		return n;
 	}
 
-	/** M1 while the orbs are out: one orb flies along the line of sight (15 blocks) and hits for 10 x 0.25 per orb left. */
+	/** M1 while the orbs are out: one orb flies at the enemy (up to 40 blocks) and hits for 10 x 0.25 per orb left. Each orb can fire three times. */
 	private static void shoot(ServerPlayerEntity p, PlayerRes r, long now) {
 		if (!r.orbsOn || now < r.lbShootAt) {
 			return;
@@ -183,6 +183,14 @@ public final class LightEngine {
 		if (alive <= 0) {
 			return;
 		}
+		if (r.mana < 15f) {
+			if (now >= r.lbShootAt) {
+				p.sendMessage(Text.translatable("orvwindow.msg.no_mana"), true);
+				r.lbShootAt = now + 20;
+			}
+			return;
+		}
+		r.mana -= 15f;
 		int pick = -1;
 		for (int i = 0; i < 8; i++) {
 			if (r.orbHp[i] > 0f && (pick < 0 || r.orbHp[i] > r.orbHp[pick])) {
@@ -225,7 +233,7 @@ public final class LightEngine {
 		if (hit != null) {
 			end = hit.getPos().add(0, hit.getHeight() * 0.6, 0);
 		}
-		r.orbHp[pick] = Math.max(0f, r.orbHp[pick] - 100f);
+		r.orbHp[pick] = Math.max(0f, r.orbHp[pick] - ORB_HP / 3f);
 		FxNet.send(w, FxNet.ORB_SHOT, from, end.subtract(from), 0f, 0);
 		if (hit != null) {
 			hit.timeUntilRegen = 0;

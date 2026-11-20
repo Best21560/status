@@ -210,4 +210,11 @@ public class PlayerRes {
 	public final java.util.List<LightEngine.Proj> projs = new java.util.ArrayList<>();
 	public int sentLbHash = 0;
 	public long sentLbAt = 0;
+
+	// ---- Vitality
+	public Vec3d vitPos = null;
+	public float vitHp = 0f;
+	public int idleTicks = 0;
+	public long potionUntil = 0;
+	public float potionPct = 0f;
 }
