@@ -208,6 +208,21 @@ public class PlayerRes {
 	/** The "Rage is full" message was shown (so it is not repeated). */
 	public boolean rageFullShown = false;
 	public boolean pLock = false;
+	// Rogue
+	public int rgCombo = 0;
+	public long rgLastHit = -1000;
+	public long rgDodgeIcd = 0;
+	public long rgBuffUntil = 0;
+	public UUID rgFTarget = null;
+	public int rgFHits = 0;
+	public long rgFNext = 0;
+	public boolean rgWActive = false;
+	public Vec3d rgWPos = null;
+	public Vec3d rgWDir = null;
+	public int rgWLeft = 0;
+	public final java.util.Set<UUID> rgWHit = new java.util.HashSet<>();
+	public UUID rgClone = null;
+	public long rgCloneEnd = 0;
 	public UUID cTarget = null;
 	public long cAt = 0;
 	// Final Judgment cutscene

@@ -378,6 +378,7 @@ public final class SlayerEngine {
 		if (t >= P_END) {
 			r.pLock = false;
 			r.pTarget = null;
+			FxNet.sendTo(p, FxNet.CUTSCENE_END, p.getPos(), Vec3d.ZERO, 0f, 0);
 			return;
 		}
 		if (t == P_DASH && target != null) {
@@ -862,6 +863,9 @@ public final class SlayerEngine {
 		PlayerRes r = PassiveEngine.res(p.getUuid());
 		r.bIntroStart = 0;
 		r.fAir = false;
+		if (r.pLock) {
+			FxNet.sendTo(p, FxNet.CUTSCENE_END, p.getPos(), Vec3d.ZERO, 0f, 0);
+		}
 		r.pLock = false;
 		r.slashAt = 0;
 		r.pTarget = null;

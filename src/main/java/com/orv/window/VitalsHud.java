@@ -139,6 +139,9 @@ public final class VitalsHud {
 		if (OrvWindowClient.myClass.equals("lightbender")) {
 			LightClient.renderHud(ctx, tr);
 		}
+		if (OrvWindowClient.myClass.equals("rogue")) {
+			RogueClient.renderHud(ctx, tr);
+		}
 
 		renderTarget(ctx, mc, tr);
 	}

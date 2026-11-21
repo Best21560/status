@@ -41,6 +41,14 @@ public final class FxNet {
 	public static final int WAVE = 19;
 	/** Energy gathering above the head of a hovering Slayer (pos = above the head, b = entity id). */
 	public static final int WAVE_CHARGE = 20;
+	/** Rogue Shadow Clone: pos, dir = (body yaw, pitch, head yaw), a = seconds, b = owner entity id. */
+	public static final int CLONE = 21;
+	/** Rogue shadow aura on an entity: a = seconds, b = entity id. */
+	public static final int SHADOW_AURA = 22;
+	/** Burst of purple-black shadow flames: a = radius, b = flame count. */
+	public static final int SHADOW_BURST = 23;
+	/** Added to an effect type: draw it in the purple-black shadow colours of the Rogue. */
+	public static final int SHADOW = 256;
 
 	private static PacketByteBuf make(int type, Vec3d pos, Vec3d dir, float a, int b) {
 		PacketByteBuf out = PacketByteBufs.create();

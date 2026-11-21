@@ -19,7 +19,7 @@ public final class Classes {
 			// light and shadow trickster: lots of Mana, a bit fragile
 			new Def("lightbender", 280.0, 0.0, 0.0, 0.03, 0.0, 500f, 200f),
 			// fast and light, lots of Stamina, little Mana
-			new Def("rogue", 380.0, 0.0, 0.0, 0.08, 0.10, 250f, 500f),
+			new Def("rogue", 380.0, 0.0, 0.0, 0.15, 0.10, 250f, 500f),
 			// martial artist who trains body and inner energy: balanced
 			new Def("wuxia", 480.0, 0.0, 0.5, 0.04, 0.05, 300f, 600f),
 			// heavy hunter: tough and hard hitting, slow, little Mana

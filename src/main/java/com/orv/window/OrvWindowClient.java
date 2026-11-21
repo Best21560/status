@@ -104,6 +104,7 @@ public class OrvWindowClient implements ClientModInitializer {
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			Fx.tick(client);
+			RogueClient.tick(client);
 			boolean noControl = Fx.locked || Fx.berserkTicks > 0;
 			if (!noControl) {
 				MoveClient.tick(client);
@@ -144,6 +145,22 @@ public class OrvWindowClient implements ClientModInitializer {
 					sendAction(23);
 				}
 				prevAttack = atk;
+			} else if (myClass.equals("rogue") && !noControl && client.player != null && client.currentScreen == null) {
+				while (slashKey.wasPressed()) {
+					sendAction(30);
+				}
+				while (pursuitKey.wasPressed()) {
+					sendAction(31);
+				}
+				while (fatalKey.wasPressed()) {
+					sendAction(32);
+				}
+				while (judgmentKey.wasPressed()) {
+					sendAction(33);
+				}
+				while (berserkKey.wasPressed()) {
+					sendAction(34);
+				}
 			} else {
 				while (slashKey.wasPressed() || pursuitKey.wasPressed() || fatalKey.wasPressed() || judgmentKey.wasPressed()) {
 					// drop presses while the player has no control
@@ -335,6 +352,7 @@ public class OrvWindowClient implements ClientModInitializer {
 
 		WorldRenderEvents.LAST.register(StatusRenderer::render);
 		WorldRenderEvents.LAST.register(Fx::render);
+		WorldRenderEvents.AFTER_ENTITIES.register(RogueClient::render);
 	}
 
 	/** Open the window and release the mouse cursor so it can be used on the window. */

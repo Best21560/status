@@ -231,6 +231,9 @@ public final class PassiveEngine {
 			}
 			return true; // dash / roll invulnerability
 		}
+		if (RogueEngine.dodge(p, r, source, nowI)) {
+			return true;
+		}
 		if (r.owned.isEmpty()) {
 			return false;
 		}
@@ -268,6 +271,7 @@ public final class PassiveEngine {
 		Entity a = source.getAttacker();
 		if (a instanceof ServerPlayerEntity atk) {
 			out = LightEngine.attackerAdjust(atk, source, out);
+			out = RogueEngine.attackerAdjust(atk, source, out, now);
 			out = attackerBonus(atk, victim, source, out, now);
 			out *= 1f + res(atk.getUuid()).stats[0] * LevelEngine.STR_DAMAGE;
 		}
@@ -646,6 +650,7 @@ public final class PassiveEngine {
 			PlayerRes r = res(atk.getUuid());
 			if (!inReflect && source.getSource() == atk) {
 				SlayerEngine.onHit(atk, r, now);
+				RogueEngine.onHit(atk, r, now);
 			}
 			if (r.owned.isEmpty() || inReflect) {
 				return;
@@ -888,6 +893,7 @@ public final class PassiveEngine {
 		if (entity instanceof ServerPlayerEntity dead) {
 			PlayerRes r = res(dead.getUuid());
 			r.souls /= 2;
+			RogueEngine.onLeave(dead);
 			if (SlayerEngine.is(r)) {
 				SlayerEngine.onLeave(dead);
 				LightEngine.onLeave(dead);
@@ -902,6 +908,7 @@ public final class PassiveEngine {
 		}
 		PlayerRes r = res(p.getUuid());
 		SlayerEngine.onKill(p, r, entity, nowOf(p));
+		RogueEngine.onKill(p, r, entity, nowOf(p));
 		if (r.owned.isEmpty()) {
 			return;
 		}

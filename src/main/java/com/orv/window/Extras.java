@@ -59,6 +59,7 @@ public final class Extras {
 			case 6 -> soulEater(p, r, now);
 			case 10, 11, 12, 13, 14 -> SlayerEngine.action(p, r, id, now);
 			case 20, 21, 22, 23 -> LightEngine.action(p, r, id, now);
+			case 30, 31, 32, 33, 34 -> RogueEngine.action(p, r, id, now);
 			case 7 -> dash(p, r, now);
 			case 8 -> {
 				if (PassiveEngine.has(r, "double_jump")) {
@@ -166,6 +167,7 @@ public final class Extras {
 		LevelEngine.tick(p, r);
 		SlayerEngine.tick(p, r, now);
 		LightEngine.tick(p, r, now);
+		RogueEngine.tick(p, r, now);
 		Vitality.tick(p, r, now);
 
 		// Weapon Mastery: give back the durability that the hit just cost

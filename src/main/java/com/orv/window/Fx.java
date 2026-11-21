@@ -40,6 +40,7 @@ public final class Fx {
 		long start;
 		float life;
 		long seed;
+		boolean shadow;
 		double maxDist = 34.0;
 		final List<Vec3d> trail = new ArrayList<>();
 	}
@@ -110,7 +111,7 @@ public final class Fx {
 			berserkTicks--;
 		}
 		// safety: the server says the cutscene lock is over but the end packet got lost
-		if (cutscene && !locked && System.currentTimeMillis() - cutsceneAt > 32000) {
+		if (cutscene && (CutsceneCam.finished() || (!locked && System.currentTimeMillis() - cutsceneAt > 32000))) {
 			endCutscene(mc);
 		}
 	}
@@ -134,9 +135,26 @@ public final class Fx {
 		if (mc.world == null || mc.player == null) {
 			return;
 		}
+		boolean shadow = (type & FxNet.SHADOW) != 0;
+		type &= 0xFF;
+		if (shadow && type == FxNet.DASH) {
+			RogueClient.trail(pos, dir);
+		}
 		switch (type) {
+			case FxNet.SHADOW_AURA -> {
+				RogueClient.aura(b, a);
+				return;
+			}
+			case FxNet.SHADOW_BURST -> {
+				RogueClient.burst(pos, a, b);
+				return;
+			}
 			case FxNet.CUTSCENE_START -> {
 				startCutscene(mc, b, Math.round(a));
+				return;
+			}
+			case FxNet.CLONE -> {
+				RogueClient.spawn(pos, dir, a, b);
 				return;
 			}
 			case FxNet.ANIM -> {
@@ -162,6 +180,7 @@ public final class Fx {
 		e.b = b;
 		e.start = System.nanoTime();
 		e.seed = RAND.nextLong();
+		e.shadow = shadow;
 		e.life = switch (type) {
 			case FxNet.SLASH -> b == 2 ? 0.62f : 0.46f;
 			case FxNet.IMPACT -> 0.5f;
@@ -331,6 +350,25 @@ public final class Fx {
 		}
 	}
 
+	/** Maps any colour to the purple-black shadow palette by its brightness (dark stays black, bright turns pale lilac). */
+	static int toShadow(int argb) {
+		int r = (argb >> 16) & 255;
+		int g = (argb >> 8) & 255;
+		int b = argb & 255;
+		float l = Math.max(r, Math.max(g, b)) / 255f * 0.75f + (0.3f * r + 0.59f * g + 0.11f * b) / 255f * 0.25f;
+		float[][] c = {{0, 0, 0}, {40, 0, 80}, {120, 30, 225}, {175, 100, 255}, {222, 190, 255}, {246, 238, 255}};
+		float[] at = {0f, 0.15f, 0.4f, 0.65f, 0.88f, 1f};
+		int k = 0;
+		while (k < at.length - 2 && l > at[k + 1]) {
+			k++;
+		}
+		float t = clamp01((l - at[k]) / (at[k + 1] - at[k]));
+		int nr = Math.round(c[k][0] + (c[k + 1][0] - c[k][0]) * t);
+		int ng = Math.round(c[k][1] + (c[k + 1][1] - c[k][1]) * t);
+		int nb = Math.round(c[k][2] + (c[k + 1][2] - c[k][2]) * t);
+		return (argb & 0xFF000000) | (nr << 16) | (ng << 8) | nb;
+	}
+
 	static void vignettePublic(DrawContext ctx, int w, int h, int rgb, float strength) {
 		vignette(ctx, w, h, rgb, strength);
 	}
@@ -416,6 +454,8 @@ public final class Fx {
 		Vec3d camRight = new Vec3d(1, 0, 0);
 		Vec3d camUp = new Vec3d(0, 1, 0);
 		private boolean begun = false;
+		/** Draw in the Rogue's purple-black instead of the original colours. */
+		boolean shadow = false;
 
 		/** Draws what was collected (the buffer is only opened when the first vertex arrives, so it is never empty). */
 		void flush() {
@@ -472,6 +512,9 @@ public final class Fx {
 		}
 
 		void v(Vec3d p, int argb) {
+			if (shadow) {
+				argb = toShadow(argb);
+			}
 			if (!begun) {
 				begun = true;
 				b.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR);
@@ -659,7 +702,7 @@ public final class Fx {
 			return;
 		}
 		float auraK = auraStrength();
-		if (LIST.isEmpty() && auraK <= 0f && !LightClient.any() && !PoseClient.active()) {
+		if (LIST.isEmpty() && auraK <= 0f && !LightClient.any() && !PoseClient.active() && !RogueClient.any()) {
 			return;
 		}
 		MatrixStack ms = ctx.matrixStack();
@@ -685,6 +728,10 @@ public final class Fx {
 				continue;
 			}
 			float tt = age / e.life;
+			if (dark.shadow != e.shadow) {
+				dark.flush();
+				dark.shadow = e.shadow;
+			}
 			switch (e.type) {
 				case FxNet.SLASH -> darkSlash(dark, e, tt);
 				case FxNet.IMPACT -> darkImpact(dark, e, tt);
@@ -698,6 +745,7 @@ public final class Fx {
 				}
 			}
 		}
+		dark.shadow = false;
 		if (auraK > 0f) {
 			darkAura(dark, mc, td, auraK);
 		}
@@ -715,6 +763,7 @@ public final class Fx {
 				continue;
 			}
 			float tt = age / e.life;
+			pen.shadow = e.shadow;
 			switch (e.type) {
 				case FxNet.SLASH -> drawSlash(pen, e, tt, age);
 				case FxNet.IMPACT -> drawImpact(pen, e, tt, age);
@@ -736,10 +785,12 @@ public final class Fx {
 				}
 			}
 		}
+		pen.shadow = false;
 		if (auraK > 0f) {
 			drawAura(pen, mc, td, auraK);
 		}
 		LightClient.render(pen, mc, td);
+		RogueClient.drawGlow(pen, mc, td);
 		pen.flush();
 
 		// realistic fire sprites (Berserk aura, burst and slam fires)
@@ -747,6 +798,9 @@ public final class Fx {
 		for (Effect e : LIST) {
 			float age = (now - e.start) / 1_000_000_000f;
 			if (age >= e.life) {
+				continue;
+			}
+			if (e.shadow) {
 				continue;
 			}
 			FireSpot fs = new FireSpot();
@@ -769,6 +823,7 @@ public final class Fx {
 			spots.add(fs);
 		}
 		FireFx.render(mc, m, cam, td, auraK, spots);
+		FireFx.renderShadow(mc, m, cam, td);
 
 		RenderSystem.defaultBlendFunc();
 		RenderSystem.enableCull();

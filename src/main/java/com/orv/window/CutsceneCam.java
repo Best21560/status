@@ -50,6 +50,11 @@ public final class CutsceneCam {
 		return script == 2 && active();
 	}
 
+	/** The camera script was started and has played to its end. */
+	public static boolean finished() {
+		return t0 != 0 && time() >= TOTALS[script] + 0.3f;
+	}
+
 	public static boolean active() {
 		float t = time();
 		return t >= 0f && t < TOTALS[script];

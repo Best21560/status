@@ -74,11 +74,16 @@ final class FireFx {
 		return a + (b - a) * t;
 	}
 
+	private static final float[][] RED = {
+			{22, 0, 2}, {95, 0, 6}, {170, 6, 12}, {230, 22, 22}, {255, 70, 52}, {255, 150, 128}
+	};
+	/** Shadow flames: black-violet body, purple edge, pale lilac only in the hottest core. */
+	private static final float[][] PURPLE = {
+			{6, 0, 14}, {34, 0, 70}, {84, 10, 160}, {140, 46, 235}, {188, 120, 255}, {232, 212, 255}
+	};
+
 	/** Flame colour for a heat value 0..1 as {r,g,b} 0..255. */
-	private static void ramp(float h, float[] out) {
-		float[][] c = {
-				{22, 0, 2}, {95, 0, 6}, {170, 6, 12}, {230, 22, 22}, {255, 70, 52}, {255, 150, 128}
-		};
+	private static void ramp(float h, float[] out, float[][] c) {
 		float[] at = {0f, 0.2f, 0.42f, 0.62f, 0.82f, 1f};
 		for (int i = 0; i < c.length - 1; i++) {
 			if (h <= at[i + 1] || i == c.length - 2) {
@@ -94,11 +99,12 @@ final class FireFx {
 	private static void make() {
 		made = true;
 		try {
-			NativeImage img = new NativeImage(NativeImage.Format.RGBA, TW * VARIANTS * 2, TH, true);
+			NativeImage img = new NativeImage(NativeImage.Format.RGBA, TW * VARIANTS * 4, TH, true);
 			float[] rgb = new float[3];
-			for (int var2 = 0; var2 < VARIANTS * 2; var2++) {
+			for (int var2 = 0; var2 < VARIANTS * 4; var2++) {
 				int var = var2 % VARIANTS;
-				boolean darkLayer = var2 >= VARIANTS;
+				boolean darkLayer = (var2 / VARIANTS) % 2 == 1;
+				boolean purple = var2 >= VARIANTS * 2;
 				int seed = 101 + var * 53;
 				for (int py = 0; py < TH; py++) {
 					float v = 1f - py / (float) (TH - 1); // 0 root .. 1 tip
@@ -115,8 +121,14 @@ final class FireFx {
 						float core = Math.max(0f, Math.min(1f, d / (width * 0.95f + 0.05f)));
 						float heat = (float) Math.pow(core, 0.8) * (1f - 0.62f * v) + 0.12f * (1f - v) * n;
 						heat = Math.max(0f, Math.min(1f, heat + (n2 - 0.5f) * 0.2f)) * 0.9f;
-						ramp(heat, rgb);
-						if (darkLayer) {
+						ramp(heat, rgb, purple ? PURPLE : RED);
+						if (darkLayer && purple) {
+							// black shadow-smoke, violet where it is thin
+							float vio = Math.max(0f, 0.55f - core) * 70f;
+							rgb[0] = 4f + vio * 0.35f;
+							rgb[1] = 0f;
+							rgb[2] = 8f + vio;
+						} else if (darkLayer) {
 							// black smoke-fire with a little deep red where it is thin
 							float red = Math.max(0f, 0.5f - core) * 40f;
 							rgb[0] = 6f + red;
@@ -145,6 +157,7 @@ final class FireFx {
 		final Vec3d cam;
 		boolean begun = false;
 		boolean dark = false;
+		boolean purple = false;
 
 		Brush(BufferBuilder b, Matrix4f m, Vec3d cam) {
 			this.b = b;
@@ -165,6 +178,9 @@ final class FireFx {
 		 * One upright tongue: root at base, rises h, width w; lean = horizontal offset of the tip.
 		 */
 		void tongue(Vec3d base, double h, double w, Vec3d lean, int variant, float alpha, boolean flip) {
+			if (purple) {
+				variant += VARIANTS * 2;
+			}
 			if (dark) {
 				variant += VARIANTS;
 				h *= 1.12;
@@ -180,8 +196,8 @@ final class FireFx {
 				return;
 			}
 			r = r.normalize().multiply(w * 0.5);
-			float u0 = variant / (float) (VARIANTS * 2);
-			float u1 = (variant + 1) / (float) (VARIANTS * 2);
+			float u0 = variant / (float) (VARIANTS * 4);
+			float u1 = (variant + 1) / (float) (VARIANTS * 4);
 			if (flip) {
 				float t = u0;
 				u0 = u1;
@@ -313,6 +329,102 @@ final class FireFx {
 			Vec3d lean = new Vec3d(Math.cos(ang) * 0.3 * c.ph, 0, Math.sin(ang) * 0.3 * c.ph);
 			float a = (float) Math.sin(Math.PI * c.ph) * grow * s.alpha;
 			br.tongue(p, h, h * (0.35 + 0.2 * rnd(c.seed, 4)), lean, (int) (rnd(c.seed, 6) * VARIANTS) % VARIANTS, a, rnd(c.seed, 7) > 0.5f);
+		}
+	}
+
+	// ------------------------------------------------------------------ shadow flames (Rogue)
+
+	/** Purple-black shadow flames: the Rogue's aura, the Shadow Clones and the shadow bursts. */
+	static void renderShadow(MinecraftClient mc, Matrix4f m, Vec3d cam, float td) {
+		if (failed || !RogueClient.any()) {
+			return;
+		}
+		if (!made) {
+			make();
+			if (failed) {
+				return;
+			}
+		}
+		RenderSystem.setShader(GameRenderer::getPositionColorTexProgram);
+		RenderSystem.setShaderTexture(0, ID);
+		RenderSystem.enableBlend();
+		RenderSystem.disableCull();
+		RenderSystem.depthMask(false);
+		RenderSystem.enableDepthTest();
+		Brush br = new Brush(Tessellator.getInstance().getBuffer(), m, cam);
+		br.purple = true;
+		double t = System.nanoTime() / 1_000_000_000.0;
+		for (int pass = 0; pass < 2; pass++) {
+			br.dark = pass == 0;
+			if (pass == 0) {
+				RenderSystem.defaultBlendFunc();
+			} else {
+				RenderSystem.blendFunc(GlStateManager.SrcFactor.SRC_ALPHA, GlStateManager.DstFactor.ONE);
+			}
+			int salt = 0;
+			for (RogueClient.Aura a : RogueClient.auras(mc, td)) {
+				shadowBody(br, a.pos, a.k, a.dense, t, 300 + salt * 7, a.firstPerson);
+				salt++;
+			}
+			for (RogueClient.Burst b : RogueClient.bursts()) {
+				shadowBurst(br, b, t);
+			}
+			br.flush();
+		}
+		RenderSystem.defaultBlendFunc();
+		RenderSystem.depthMask(true);
+	}
+
+	/** Tall thin wisps rising off the whole body, plus a creeping smoke ring on the ground. */
+	private static void shadowBody(Brush br, Vec3d base, float k, boolean dense, double t, long salt, boolean firstPerson) {
+		float vis = firstPerson ? 0.35f : 1f;
+		Cyc c = new Cyc();
+		int n = dense ? 64 : 34;
+		for (int i = 0; i < n; i++) {
+			cyc(t, 0.7 + 0.6 * rnd(salt, i), i, salt, c);
+			float ph = c.ph;
+			double ang = rnd(c.seed, 1) * Math.PI * 2;
+			double y0 = 1.85 * rnd(c.seed, 3);
+			// hug the body: narrow at the legs, wider at the shoulders
+			double rad = (0.12 + 0.28 * rnd(c.seed, 2)) * (y0 > 1.1 ? 1.15 : 0.8);
+			double grow = Math.sin(Math.PI * Math.min(1f, ph * 1.05f));
+			double h = (0.7 + 1.0 * rnd(c.seed, 4)) * (0.35 + 0.65 * grow) * (0.55 + 0.45 * k);
+			double w = (0.28 + 0.3 * rnd(c.seed, 5)) * (0.5 + 0.5 * grow);
+			Vec3d p = base.add(Math.cos(ang) * rad, y0 + ph * 1.1, Math.sin(ang) * rad);
+			Vec3d lean = new Vec3d(Math.sin(t * 2.1 + i * 1.3) * 0.18 + Math.cos(ang) * 0.15 * ph, 0,
+					Math.cos(t * 1.8 + i * 0.7) * 0.18 + Math.sin(ang) * 0.15 * ph);
+			float a = (float) Math.pow(Math.sin(Math.PI * ph), 0.8) * k * vis * (br.dark ? 0.95f : 0.75f);
+			br.tongue(p, h, w, lean, (int) (rnd(c.seed, 6) * VARIANTS) % VARIANTS, a, rnd(c.seed, 7) > 0.5f);
+		}
+		int g = dense ? 18 : 10;
+		for (int i = 0; i < g; i++) {
+			cyc(t, 0.9 + 0.6 * rnd(salt + 1, i), i, salt + 1, c);
+			double ang = rnd(c.seed, 1) * Math.PI * 2;
+			double rad = 0.45 + 0.8 * rnd(c.seed, 2) * (0.6 + 0.4 * c.ph);
+			double h = (0.35 + 0.5 * rnd(c.seed, 3)) * Math.sin(Math.PI * c.ph);
+			Vec3d p = base.add(Math.cos(ang) * rad, 0.0, Math.sin(ang) * rad);
+			Vec3d lean = new Vec3d(Math.cos(ang) * 0.3 * c.ph, 0, Math.sin(ang) * 0.3 * c.ph);
+			float a = (float) Math.sin(Math.PI * c.ph) * k * vis * 0.7f;
+			br.tongue(p, h, 0.7 + 0.5 * rnd(c.seed, 4), lean, (int) (rnd(c.seed, 6) * VARIANTS) % VARIANTS, a, rnd(c.seed, 7) > 0.5f);
+		}
+	}
+
+	private static void shadowBurst(Brush br, RogueClient.Burst s, double t) {
+		float tt = s.tt;
+		float grow = (float) Math.min(1.0, tt * 4.0) * (1f - Math.max(0f, (tt - 0.45f) / 0.55f));
+		if (grow <= 0.02f) {
+			return;
+		}
+		Cyc c = new Cyc();
+		for (int i = 0; i < s.count; i++) {
+			cyc(t, 0.4 + 0.35 * rnd(s.seed, i), i, s.seed, c);
+			double ang = rnd(c.seed, 1) * Math.PI * 2;
+			double rad = s.radius * Math.sqrt(rnd(c.seed, 2)) * (0.6 + 0.6 * tt);
+			double h = s.height * (0.5 + 0.5 * rnd(c.seed, 3)) * Math.sin(Math.PI * c.ph) * grow;
+			Vec3d p = s.pos.add(Math.cos(ang) * rad, s.lift * rnd(c.seed, 8), Math.sin(ang) * rad);
+			Vec3d lean = new Vec3d(Math.cos(ang) * 0.4 * c.ph, 0, Math.sin(ang) * 0.4 * c.ph);
+			float a = (float) Math.sin(Math.PI * c.ph) * grow * s.alpha;
+			br.tongue(p, h, h * (0.3 + 0.2 * rnd(c.seed, 4)), lean, (int) (rnd(c.seed, 6) * VARIANTS) % VARIANTS, a, rnd(c.seed, 7) > 0.5f);
 		}
 	}
 }

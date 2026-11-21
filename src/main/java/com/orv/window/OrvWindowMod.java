@@ -124,6 +124,7 @@ public class OrvWindowMod implements ModInitializer {
 			UUID id = handler.player.getUuid();
 			SlayerEngine.onLeave(handler.player);
 			LightEngine.onLeave(handler.player);
+			RogueEngine.onLeave(handler.player);
 			PassiveEngine.clear(id);
 			if (OPEN.remove(id)) {
 				broadcast(server, id, false);
