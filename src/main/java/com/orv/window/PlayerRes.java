@@ -19,6 +19,14 @@ public class PlayerRes {
 	public volatile String classId = "";
 	public boolean fullHeal = false;
 
+	// mod level (see LevelEngine)
+	public boolean lvLoaded = false;
+	public int level = 1;
+	public int xp = 0;
+	public int statPoints = 0;
+	/** STR, DEX, INT, CON, WILL. */
+	public final int[] stats = new int[5];
+
 	// resources
 	public float mana = 100f;
 	public float stamina = 100f;
@@ -173,6 +181,10 @@ public class PlayerRes {
 	public UUID fTarget = null;
 	public Vec3d fDest = null;
 	public boolean fFell = false;
+	public int fFlight = 20;
+	/** Slash lands a moment after the key press (when the swing connects): tick, and which way it swings. */
+	public long slashAt = 0;
+	public boolean slashFlipNow = false;
 	public double fLastY = 0;
 	/** Cooldown end ticks: 0 Slash, 1 Relentless Pursuit, 2 Counter Hunt, 3 Fatal Strike, 4 Final Judgment. */
 	public final long[] cdEnd = new long[5];

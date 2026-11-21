@@ -71,8 +71,29 @@ public final class Fx {
 
 	// ------------------------------------------------------------------ client tick
 
+	private static int shakeTicks = 0;
+	private static int shakeTotal = 1;
+	private static float shakeAmp = 0f;
+	private static float shakePrev = 0f;
+
+	private static void shake(float amp, int ticks) {
+		shakeAmp = amp;
+		shakeTicks = ticks;
+		shakeTotal = ticks;
+	}
+
 	public static void tick(MinecraftClient mc) {
 		clientTick++;
+		if (shakeTicks > 0 && mc.player != null) {
+			// camera shake: a decaying random jolt of the view (the previous jolt is taken back first)
+			float off = (RAND.nextFloat() - 0.5f) * 2f * shakeAmp * (shakeTicks / (float) shakeTotal);
+			shakeTicks--;
+			if (shakeTicks == 0) {
+				off = 0f;
+			}
+			mc.player.setPitch(mc.player.getPitch() + off - shakePrev);
+			shakePrev = off;
+		}
 		if (berserkTicks > 0) {
 			berserkTicks--;
 		}
@@ -150,6 +171,11 @@ public final class Fx {
 		}
 		LIST.add(e);
 		playSound(mc, type, pos, a, b);
+		if (type == FxNet.SHOCK && b == 2 && a >= 5f && mc.player.squaredDistanceTo(pos) < 900.0) {
+			shake(2.6f, 14);
+		} else if (type == FxNet.BERSERK_START && mc.player.squaredDistanceTo(pos) < 900.0) {
+			shake(3.2f, 34);
+		}
 		if (type == FxNet.BERSERK_START && mc.player.squaredDistanceTo(pos) < 100.0) {
 			flash(0.7f, 0xFF3010);
 		}
@@ -306,6 +332,29 @@ public final class Fx {
 			if (begun) {
 				begun = false;
 				Tessellator.getInstance().draw();
+			}
+		}
+
+		/** A hard-edged flame / blade shape along a centre line: narrow root, widest near the base, ending in a sharp tip. */
+		void blade(Vec3d[] pts, double w, int rgb, float alpha) {
+			int n = pts.length;
+			if (n < 2 || alpha <= 0.003f) {
+				return;
+			}
+			Vec3d[] l = new Vec3d[n];
+			Vec3d[] r = new Vec3d[n];
+			for (int i = 0; i < n; i++) {
+				Vec3d tan = i == 0 ? pts[1].subtract(pts[0]) : (i == n - 1 ? pts[n - 1].subtract(pts[n - 2]) : pts[i + 1].subtract(pts[i - 1]));
+				Vec3d side = tan.crossProduct(pts[i].subtract(cam));
+				side = side.lengthSquared() < 1e-10 ? camRight : side.normalize();
+				double s = i / (double) (n - 1);
+				double ww = w * Math.pow(1 - s, 0.85) * Math.min(1.0, s * 5.0 + 0.15);
+				l[i] = pts[i].add(side.multiply(ww * 0.5));
+				r[i] = pts[i].subtract(side.multiply(ww * 0.5));
+			}
+			int c = argb(rgb, alpha);
+			for (int i = 0; i < n - 1; i++) {
+				quad(l[i], r[i], r[i + 1], l[i + 1], c, c, c, c);
 			}
 		}
 
@@ -520,7 +569,7 @@ public final class Fx {
 			return;
 		}
 		float auraK = auraStrength();
-		if (LIST.isEmpty() && auraK <= 0f && !LightClient.any()) {
+		if (LIST.isEmpty() && auraK <= 0f && !LightClient.any() && !PoseClient.active()) {
 			return;
 		}
 		MatrixStack ms = ctx.matrixStack();
@@ -561,6 +610,7 @@ public final class Fx {
 		if (auraK > 0f) {
 			darkAura(dark, mc, td, auraK);
 		}
+		PoseClient.drawBlades(dark, null, mc, td);
 		dark.flush();
 
 		// pass 2: glowing light, additive
@@ -598,6 +648,7 @@ public final class Fx {
 			drawAura(pen, mc, td, auraK);
 		}
 		LightClient.render(pen, mc, td);
+		PoseClient.drawBlades(null, pen, mc, td);
 		pen.flush();
 
 		RenderSystem.defaultBlendFunc();
@@ -656,13 +707,49 @@ public final class Fx {
 		}
 	}
 
+	/** Like strip(), but hard-edged: transparent only at the very tail, solid after that (ink-drawn look). */
+	private static void inkStrip(Pen pen, SG g, double radius, double tail, double head, double width, int rgb, float alpha, int n) {
+		for (int i = 0; i < n; i++) {
+			double s0 = i / (double) n;
+			double s1 = (i + 1) / (double) n;
+			Vec3d[] a = arcPoints(g.origin, g.f, g.p, radius, g.sweep, tail + (head - tail) * s0, width * taper(s0));
+			Vec3d[] b = arcPoints(g.origin, g.f, g.p, radius, g.sweep, tail + (head - tail) * s1, width * taper(s1));
+			int c0 = argb(rgb, Math.min(1f, (float) s0 * 5f) * g.fade * alpha);
+			int c1 = argb(rgb, Math.min(1f, (float) s1 * 5f) * g.fade * alpha);
+			pen.quad(a[0], a[1], b[1], b[0], c0, c0, c1, c1);
+		}
+	}
+
 	private static void darkSlash(Pen dark, Effect e, float tt) {
 		SG g = sg(e, tt);
 		if (g.head - g.tail < 0.015) {
 			return;
 		}
-		strip(dark, g, g.radius, g.tail, g.head, 1.25 * g.scale, 0x14000C, 0.62f, 34);
-		strip(dark, g, g.radius, g.tail, g.head, 0.7 * g.scale, 0x0A0006, 0.5f, 34);
+		boolean counter = e.b == 3;
+		inkStrip(dark, g, g.radius, g.tail, g.head, 1.15 * g.scale, 0x040003, 0.95f, 36);
+		inkStrip(dark, g, g.radius, g.tail, g.head, 0.62 * g.scale, counter ? 0xC8B070 : 0xC8101A, 0.97f, 36);
+		inkStrip(dark, g, g.radius, g.tail, g.head, 0.3 * g.scale, counter ? 0xFFF0C8 : 0xFF5A40, 0.98f, 36);
+		inkStrip(dark, g, g.radius, g.tail, g.head, 0.09 * g.scale, 0xFFFFFF, 1f, 36);
+		// ink flames licking up from the cut
+		float grow = clamp01(tt * 3.5f) * (1f - clamp01((tt - 0.5f) / 0.5f));
+		if (grow > 0.02f) {
+			double t = tt * e.life;
+			for (int i = 0; i < 7; i++) {
+				double u = g.tail + (g.head - g.tail) * (0.15 + 0.8 * rnd(e.seed, i + 400));
+				Vec3d c = arcPoints(g.origin, g.f, g.p, g.radius, g.sweep, u, 0)[0];
+				Vec3d out = c.subtract(g.origin);
+				out = out.lengthSquared() < 1e-6 ? g.f : out.normalize();
+				double h = (0.7 + 1.0 * rnd(e.seed, i + 420)) * g.scale * grow;
+				Vec3d[] pts = new Vec3d[6];
+				for (int j = 0; j < 6; j++) {
+					double s = j / 5.0;
+					pts[j] = c.add(out.multiply(0.25 * s)).add(0, s * h, 0).add(g.p.multiply(Math.sin(t * 9 + i + s * 3) * 0.08 * s));
+				}
+				dark.face(c);
+				dark.blade(pts, 0.34 * g.scale, 0x5A0510, 0.92f);
+				dark.blade(pts, 0.2 * g.scale, 0xE0161E, 0.95f);
+			}
+		}
 	}
 
 	private static void drawSlash(Pen pen, Effect e, float tt, float age) {
@@ -670,9 +757,9 @@ public final class Fx {
 		int[] pal = g.pal;
 		if (g.head - g.tail >= 0.015) {
 			double w = g.scale;
-			strip(pen, g, g.radius, g.tail, g.head, 0.95 * w, pal[0], 0.28f, 34);
-			strip(pen, g, g.radius, g.tail, g.head, 0.50 * w, mix(pal[0], pal[1], 0.5f), 0.78f, 34);
-			strip(pen, g, g.radius, g.tail, g.head, 0.22 * w, pal[1], 0.92f, 34);
+			strip(pen, g, g.radius, g.tail, g.head, 1.3 * w, pal[0], 0.16f, 34);
+			strip(pen, g, g.radius, g.tail, g.head, 0.7 * w, mix(pal[0], pal[1], 0.5f), 0.3f, 34);
+			strip(pen, g, g.radius, g.tail, g.head, 0.3 * w, pal[1], 0.4f, 34);
 			strip(pen, g, g.radius, g.tail, g.head, 0.07 * w, pal[2], 1.0f, 34);
 			// thin echoes that lag behind the blade
 			double h2 = easeOut((tt - 0.035) / 0.40);
@@ -750,6 +837,35 @@ public final class Fx {
 		float size = Math.max(0.6f, e.a);
 		if (tt < 0.04f) {
 			return;
+		}
+		// hard black-and-red spikes thrown out of the hit, then ink flames rising from it
+		dark.face(e.pos);
+		if (tt < 0.45f) {
+			float k = tt / 0.45f;
+			double grow = easeOut(Math.min(1.0, k * 2.2));
+			int spikes = 9 + Math.round(size * 2f);
+			for (int i = 0; i < spikes; i++) {
+				double ang = i * Math.PI * 2 / spikes + rnd(e.seed, i + 500) * 0.4;
+				double len = (0.7 + 1.3 * rnd(e.seed, i + 520)) * size * grow;
+				Vec3d d = dark.camRight.multiply(Math.cos(ang)).add(dark.camUp.multiply(Math.sin(ang)));
+				Vec3d[] pts = new Vec3d[4];
+				for (int j = 0; j < 4; j++) {
+					pts[j] = e.pos.add(d.multiply(len * j / 3.0));
+				}
+				float a = 1f - k * k;
+				dark.blade(pts, 0.34 * size, 0x050003, 0.95f * a);
+				dark.blade(pts, 0.17 * size, 0xD0121C, 0.95f * a);
+			}
+		}
+		double fl = clamp01((tt - 0.05f) / 0.3f) * (1f - clamp01((tt - 0.55f) / 0.45f));
+		if (fl > 0.02) {
+			double t = tt * 0.5;
+			for (int i = 0; i < 3; i++) {
+				double ang = rnd(e.seed, i + 540) * Math.PI * 2;
+				Vec3d root = e.pos.add(Math.cos(ang) * 0.25 * size, -0.1, Math.sin(ang) * 0.25 * size);
+				double h = (0.8 + 0.8 * rnd(e.seed, i + 560)) * size * fl;
+				inkFlame(dark, flamePts(root, ang, h, 0.3, t * 20, i * 2.0, 6), 0.4 * size, (float) fl);
+			}
 		}
 		for (int i = 0; i < 4; i++) {
 			Vec3d d = rndDir(e.seed, i + 100).multiply(0.5 * size * tt);
@@ -866,6 +982,26 @@ public final class Fx {
 		}
 		float a = 0.62f * (1f - clamp01((tt - 0.5f) / 0.5f));
 		dark.disc(e.pos.add(0, 0.03, 0), R * 0.55 * easeOut(Math.min(1.0, tt * 3.0)), 0x100208, a);
+		if (e.b == 2) {
+			// chunks of ground thrown up and falling back
+			float age = tt * e.life;
+			for (int i = 0; i < 18; i++) {
+				double ang = rnd(e.seed, i + 300) * Math.PI * 2;
+				double spread = (0.6 + R * 0.35 * rnd(e.seed, i + 320)) * easeOut(Math.min(1.0, age * 1.6));
+				double vy = 5.0 + 6.0 * rnd(e.seed, i + 340);
+				double y = vy * age - 9.0 * age * age;
+				if (y < 0 || age > 0.95f) {
+					continue;
+				}
+				Vec3d p0 = e.pos.add(Math.cos(ang) * spread, 0.1 + y, Math.sin(ang) * spread);
+				dark.face(p0);
+				double sz = 0.07 + 0.09 * rnd(e.seed, i + 360);
+				Vec3d rr = dark.camRight.multiply(sz);
+				Vec3d uu = dark.camUp.multiply(sz);
+				int col = argb(mix(0x2E2620, 0x4A3E34, rnd(e.seed, i + 380)), 0.95f);
+				dark.quad(p0.subtract(rr).subtract(uu), p0.add(rr).subtract(uu), p0.add(rr).add(uu), p0.subtract(rr).add(uu), col, col, col, col);
+			}
+		}
 	}
 
 	private static void drawShock(Pen pen, Effect e, float tt) {
@@ -983,16 +1119,6 @@ public final class Fx {
 			pen.streak(prev, cur, 0.06, argb(0xFF7030, 0f), argb(mix(0xFFC070, 0xFF2010, s), 0.95f * a));
 			pen.glow(cur, 0.07, 0xFFB060, 0.8f * a);
 		}
-		double rg = easeOut(Math.min(1.0, tt * 1.6));
-		pen.ring(c.add(0, 0.05, 0), 2.4 * rg, 0.09, 0xFF3020, 0.85f * al);
-		pen.ring(c.add(0, 0.05, 0), 1.6 * rg, 0.06, 0xFF8040, 0.65f * al);
-		double spin = tt * e.life * 2.0;
-		for (int i = 0; i < 6; i++) {
-			double ang = spin + i * Math.PI / 3;
-			Vec3d dir = new Vec3d(Math.cos(ang), 0, Math.sin(ang));
-			Vec3d side = new Vec3d(-dir.z, 0, dir.x);
-			pen.petal(c.add(0, 0.06, 0).add(dir.multiply(1.6 * rg)), dir, side, 0.8 * rg, 0.35, 0xFF4020, 0.8f * al);
-		}
 		pen.glow(c.add(0, 1.0, 0), 0.3 + 1.2 * tt * tt, 0xFF3010, (0.2f + 0.5f * tt) * outA);
 		pen.glow(c.add(0, 1.0, 0), 0.1 + 0.4 * tt * tt, 0xFFD090, 0.5f * tt * outA);
 	}
@@ -1007,6 +1133,18 @@ public final class Fx {
 		Vec3d g = e.pos.add(0, 0.04, 0);
 		dark.disc(g, 5.5 * easeOut(Math.min(1.0, tt * 2.5)), 0x100208, 0.6f * (1f - clamp01((tt - 0.5f) / 0.5f)));
 		dark.pillar(g, 10.0, 1.2 * (1 - tt * 0.5), 0x0C0206, 0.55f * (1 - tt));
+		float grow = (float) easeOut(Math.min(1.0, tt * 2.0)) * (1f - clamp01((tt - 0.6f) / 0.4f));
+		if (grow > 0.02f) {
+			double t = tt * e.life;
+			for (int i = 0; i < 20; i++) {
+				double ang = i * Math.PI * 2 / 20 + rnd(e.seed, i + 600) * 0.3;
+				double rad = 1.2 + 3.2 * rnd(e.seed, i + 620);
+				Vec3d root = e.pos.add(Math.cos(ang) * rad, 0.05, Math.sin(ang) * rad);
+				double h = (2.2 + 3.0 * rnd(e.seed, i + 640)) * grow;
+				dark.face(root.add(0, h * 0.5, 0));
+				inkFlame(dark, flamePts(root, ang, h, 0.8, t * 2.0, i * 1.3, 9), 0.7, 1f);
+			}
+		}
 	}
 
 	private static void drawBerserkBurst(Pen pen, Effect e, float tt) {
@@ -1080,14 +1218,61 @@ public final class Fx {
 		}
 	}
 
-	// ---- Berserk aura around the local player: black smoke and tongues of fire
+	// ---- Berserk aura around the local player: a body wrapped in shadow, hard-edged crimson ink flames, white eyes
+
+	/** Centre line of an ink flame: rises from root, leans, sways and curls at the tip. */
+	private static Vec3d[] flamePts(Vec3d root, double ang, double height, double lean, double t, double phase, int segs) {
+		Vec3d[] pts = new Vec3d[segs + 1];
+		Vec3d out = new Vec3d(Math.cos(ang), 0, Math.sin(ang));
+		Vec3d side = new Vec3d(-out.z, 0, out.x);
+		for (int j = 0; j <= segs; j++) {
+			double s = j / (double) segs;
+			double sway = Math.sin(t * 5.5 + phase + s * 4.0) * 0.22 * s * s;
+			double curl = Math.sin(t * 3.0 + phase * 1.3) * 0.35 * Math.pow(s, 2.2);
+			pts[j] = root.add(out.multiply(lean * Math.pow(s, 1.5))).add(side.multiply(sway + curl)).add(0, s * height, 0);
+		}
+		return pts;
+	}
+
+	private static Vec3d[] shift(Vec3d[] pts, Vec3d by, int keep) {
+		Vec3d[] o = new Vec3d[keep];
+		for (int i = 0; i < keep; i++) {
+			o[i] = pts[i].add(by.multiply(1.0 - i / (double) keep * 0.5));
+		}
+		return o;
+	}
+
+	/** One hard-edged flame: dark red body, bright red middle, a black stripe and a hot sliver, like inked art. */
+	private static void inkFlame(Pen pen, Vec3d[] pts, double w, float alpha) {
+		pen.blade(pts, w, 0x5A0510, 0.92f * alpha);
+		pen.blade(pts, w * 0.62, 0xC8101A, 0.95f * alpha);
+		Vec3d off = pen.camRight.multiply(w * 0.12);
+		pen.blade(shift(pts, off, Math.max(2, pts.length - 2)), w * 0.2, 0x0A0004, 0.9f * alpha);
+		int keep = Math.max(2, (int) (pts.length * 0.7));
+		pen.blade(shift(pts, off.multiply(-1.5), keep), w * 0.16, 0xFF5A48, 0.85f * alpha);
+	}
 
 	private static void darkAura(Pen dark, MinecraftClient mc, float td, float k) {
 		Vec3d base = mc.player.getLerpedPos(td);
 		double t = System.nanoTime() / 1_000_000_000.0;
-		float vis = mc.options.getPerspective().isFirstPerson() ? 0.5f : 1f;
-		dark.disc(base.add(0, 0.03, 0), 2.2, 0x10020A, 0.55f * k);
-		int wisps = k > 0.5f ? 14 : 5;
+		float vis = mc.options.getPerspective().isFirstPerson() ? 0.45f : 1f;
+		// scorched ground with a red stain
+		dark.disc(base.add(0, 0.03, 0), 2.6, 0x0A0004, 0.7f * k);
+		dark.disc(base.add(0, 0.035, 0), 1.6, 0x5A0008, 0.4f * k);
+		// the body is swallowed by shadow
+		for (int i = 0; i < 4; i++) {
+			double h = 0.3 + i * 0.55;
+			dark.glow(base.add(0, h, 0), 0.95 + 0.15 * Math.sin(t * 2 + i), 0x040004, 0.34f * k * vis);
+		}
+		// red mist billowing behind the shadow
+		dark.face(base.add(0, 1.2, 0));
+		for (int i = 0; i < 7; i++) {
+			double ang = i * 0.9 + t * 0.25;
+			Vec3d p = base.add(Math.cos(ang) * 1.3, 0.6 + 0.35 * i % 2 + 0.5 * Math.sin(t * 1.5 + i), Math.sin(ang) * 1.3);
+			dark.glow(p, 1.0 + 0.25 * Math.sin(t * 2 + i * 2), 0x7A000C, 0.2f * k * vis);
+		}
+		// black smoke rising
+		int wisps = k > 0.5f ? 12 : 4;
 		for (int i = 0; i < wisps; i++) {
 			float s1 = rnd(11, i);
 			float s2 = rnd(12, i);
@@ -1099,78 +1284,61 @@ public final class Fx {
 				double rad = 0.7 + 0.55 * ph;
 				pts[j] = base.add(Math.cos(ang) * rad, 0.2 + ph * 3.2, Math.sin(ang) * rad);
 			}
-			float a = (float) Math.sin(Math.PI * phase) * 0.45f * k * vis;
-			dark.ribbon(pts, 0.25, 0.95, 0x140208, a * 0.3f, a);
+			float a = (float) Math.sin(Math.PI * phase) * 0.6f * k * vis;
+			dark.ribbon(pts, 0.3, 1.1, 0x050005, a * 0.3f, a);
+		}
+		// the flames
+		int tongues = k > 0.5f ? 18 : 6;
+		for (int i = 0; i < tongues; i++) {
+			float s2 = rnd(22, i);
+			float s3 = rnd(23, i);
+			double ang = i * Math.PI * 2 / tongues + t * 0.3 + rnd(21, i) * 0.4;
+			double rad = 0.5 + 0.45 * s2;
+			double flick = 0.8 + 0.2 * Math.sin(t * (4.0 + 4.0 * s3) + i);
+			double height = (1.7 + 1.7 * s3) * flick * (0.4 + 0.6 * k);
+			Vec3d root = base.add(Math.cos(ang) * rad, 0.05, Math.sin(ang) * rad);
+			dark.face(root.add(0, height * 0.5, 0));
+			inkFlame(dark, flamePts(root, ang, height, 0.5 + 0.5 * s2, t, i * 1.7, 9), 0.5 + 0.3 * s2, k * vis);
 		}
 	}
 
 	private static void drawAura(Pen pen, MinecraftClient mc, float td, float k) {
 		Vec3d base = mc.player.getLerpedPos(td);
 		double t = System.nanoTime() / 1_000_000_000.0;
-		float vis = mc.options.getPerspective().isFirstPerson() ? 0.55f : 1f;
-		int tongues = k > 0.5f ? 22 : 8;
-		for (int i = 0; i < tongues; i++) {
-			float s1 = rnd(21, i);
-			float s2 = rnd(22, i);
-			float s3 = rnd(23, i);
-			double ang = i * Math.PI * 2 / tongues + t * 0.35 + s1 * 0.4;
-			double rad = 0.55 + 0.4 * s2;
-			double flick = 0.75 + 0.25 * Math.sin(t * (5.0 + 4.0 * s3) + i);
-			double height = (1.3 + 1.5 * s3) * flick * (0.45 + 0.55 * k);
-			int segs = 9;
-			Vec3d prev = null;
-			for (int j = 0; j <= segs; j++) {
-				double s = j / (double) segs;
-				double lean = 0.3 * Math.pow(s, 1.5);
-				double sway = Math.sin(t * 6.0 + i * 1.7 + s * 5.0) * 0.13 * s;
-				double rr = rad + lean;
-				Vec3d cur = base.add(Math.cos(ang) * rr + sway * -Math.sin(ang), 0.05 + s * height,
-						Math.sin(ang) * rr + sway * Math.cos(ang));
-				if (prev != null) {
-					float s0 = (j - 1) / (float) segs;
-					int c0 = mix(0xFFD070, 0xB00C10, s0);
-					int c1 = mix(0xFFD070, 0xB00C10, (float) s);
-					float a0 = (float) Math.pow(1 - s0, 0.8) * 0.85f * vis;
-					float a1 = (float) Math.pow(1 - s, 0.8) * 0.85f * vis;
-					double w0 = 0.3 * Math.pow(1 - s0, 0.7) * (0.6 + 0.6 * s2);
-					double w1 = 0.3 * Math.pow(1 - s, 0.7) * (0.6 + 0.6 * s2);
-					pen.streak(prev, cur, (w0 + w1) * 0.9, argb(c0, a0 * 0.35f), argb(c1, a1 * 0.35f));
-					pen.streak(prev, cur, (w0 + w1) * 0.4, argb(c0, a0), argb(c1, a1));
-				}
-				prev = cur;
+		boolean first = mc.options.getPerspective().isFirstPerson();
+		float vis = first ? 0.5f : 1f;
+		// eyes: two white points with a thin red gleam, in the face of the shadow
+		if (!first) {
+			net.minecraft.entity.player.PlayerEntity pl = mc.player;
+			double yr = Math.toRadians(net.minecraft.util.math.MathHelper.lerpAngleDegrees(td, pl.prevHeadYaw, pl.headYaw));
+			Vec3d fwd = new Vec3d(-Math.sin(yr), 0, Math.cos(yr));
+			Vec3d right = new Vec3d(-Math.cos(yr), 0, -Math.sin(yr));
+			Vec3d head = base.add(0, pl.getStandingEyeHeight() - 0.02, 0).add(fwd.multiply(0.27));
+			for (int sgn = -1; sgn <= 1; sgn += 2) {
+				Vec3d eye = head.add(right.multiply(0.115 * sgn));
+				float flick = 0.85f + 0.15f * (float) Math.sin(t * 11 + sgn);
+				pen.glow(eye, 0.2, 0xFF1818, 0.5f * k * flick);
+				pen.glow(eye, 0.07, 0xFFFFFF, 1.0f * k);
+				pen.streak(eye, eye.add(right.multiply(0.7 * sgn)).add(0, 0.16, 0), 0.03, argb(0xFFFFFF, 0.9f * k), argb(0xFF2020, 0f));
 			}
 		}
-		// heat glow around the body
-		pen.glow(base.add(0, 1.0, 0), 1.4, 0xFF2808, (0.16f + 0.05f * (float) Math.sin(t * 9)) * k * vis);
-		pen.glow(base.add(0, 0.2, 0), 1.6, 0xFF4010, 0.28f * k * vis);
-		// embers
-		int embers = k > 0.5f ? 26 : 8;
+		// heat on the edge of the shadow and rising embers
+		pen.glow(base.add(0, 1.0, 0), 1.5, 0xB00810, 0.1f * k * vis);
+		int embers = k > 0.5f ? 22 : 6;
 		for (int i = 0; i < embers; i++) {
 			float s1 = rnd(31, i);
 			float s2 = rnd(32, i);
 			float s3 = rnd(33, i);
 			double phase = (t * (0.4 + 0.5 * s2) + s1) % 1.0;
 			double ang = s1 * Math.PI * 2 + t * (0.6 + s3);
-			double rad = 0.5 + 0.7 * s3;
-			Vec3d p = base.add(Math.cos(ang) * rad, 0.1 + phase * 3.2, Math.sin(ang) * rad);
+			double rad = 0.5 + 0.8 * s3;
+			Vec3d p = base.add(Math.cos(ang) * rad, 0.1 + phase * 3.4, Math.sin(ang) * rad);
 			float a = (float) Math.sin(Math.PI * phase) * k * vis;
-			int col = mix(0xFFB050, 0xC01808, (float) phase);
-			pen.glow(p, 0.05 + 0.05 * (1 - phase), col, 0.9f * a);
+			int col = mix(0xFF4A38, 0x900810, (float) phase);
+			pen.glow(p, 0.045 + 0.04 * (1 - phase), col, 0.95f * a);
 			if (i % 3 == 0) {
-				pen.streak(p, p.add(0, 0.4 + 0.3 * s2, 0), 0.025, argb(col, 0.8f * a), argb(col, 0f));
+				pen.streak(p, p.add(0, 0.5 + 0.3 * s2, 0), 0.02, argb(col, 0.8f * a), argb(col, 0f));
 			}
-		}
-		// sigil on the ground
-		float pulse = 0.55f + 0.25f * (float) Math.sin(t * 7.0);
-		Vec3d g = base.add(0, 0.04, 0);
-		pen.ring(g, 1.3 + 0.08 * Math.sin(t * 5), 0.14, 0xFF3010, pulse * k);
-		pen.ring(g, 2.0 + 0.12 * Math.sin(t * 3 + 1), 0.2, 0xC01810, pulse * 0.7f * k);
-		int spikes = 8;
-		for (int i = 0; i < spikes; i++) {
-			double ang = -t * 0.7 + i * Math.PI * 2 / spikes;
-			Vec3d dir = new Vec3d(Math.cos(ang), 0, Math.sin(ang));
-			Vec3d side = new Vec3d(-dir.z, 0, dir.x);
-			pen.petal(g.add(dir.multiply(1.35)), dir, side, 0.8 + 0.2 * Math.sin(t * 6 + i), 0.3, 0xFF4020, 0.75f * k);
 		}
 	}
 

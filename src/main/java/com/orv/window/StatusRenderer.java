@@ -40,11 +40,15 @@ public class StatusRenderer {
 	private static final float BTN_Y0 = ROW_Y - 5f;
 	private static final float BTN_Y1 = ROW_Y + 13f;
 
-	// shop box beside the window (to the right), in text pixels
-	private static final float SHOP_X0 = TEXT_W + 8f;
-	private static final float SHOP_X1 = SHOP_X0 + 56f;
-	private static final float SHOP_Y0 = 8f;
-	private static final float SHOP_Y1 = SHOP_Y0 + 36f;
+	// stat panel beside the window (to the right), in text pixels
+	private static final float ST_X0 = TEXT_W + 8f;
+	private static final float ST_X1 = ST_X0 + 88f;
+	private static final float ST_Y0 = 8f;
+	private static final float ST_ROW0 = ST_Y0 + 17f;
+	private static final float ST_ROW_H = 15f;
+	private static final float ST_Y1 = ST_ROW0 + 5 * ST_ROW_H + 17f;
+	private static final float ST_BTN_X0 = ST_X1 - 20f;
+	private static final float ST_BTN_X1 = ST_X1 - 5f;
 
 	// all blue, no white
 	private static final int FILL_TOP = 0xD02E9FF0;
@@ -59,7 +63,7 @@ public class StatusRenderer {
 
 	// ---- what the cursor is on ----
 	public enum Kind {
-		NONE, NAME, PLUS, SKILL, SHOP
+		NONE, NAME, PLUS, SKILL, STAT
 	}
 
 	public record Pick(Kind kind, int index) {
@@ -182,8 +186,8 @@ public class StatusRenderer {
 		Vec3d rel = p0.add(dir.multiply(t)).subtract(pickCenter);
 		double tx = (rel.dotProduct(pickRight) + HALF_W) / SCALE;
 		double ty = (pickHalfH - rel.y) / SCALE;
-		if (tx >= SHOP_X0 && tx <= SHOP_X1 && ty >= SHOP_Y0 && ty <= SHOP_Y1) {
-			return new Pick(Kind.SHOP, 0);
+		if (tx >= ST_X0 && tx <= ST_X1 && ty >= ST_ROW0 && ty < ST_ROW0 + 5 * ST_ROW_H) {
+			return new Pick(Kind.STAT, (int) ((ty - ST_ROW0) / ST_ROW_H));
 		}
 		if (tx < 0 || tx > TEXT_W || ty < 0 || ty > textHeight(pickRows)) {
 			return Pick.NONE;
@@ -314,7 +318,7 @@ public class StatusRenderer {
 			if (OrvWindowClient.canGrant(player)) {
 				drawPlusButton(b, m, center, right, up, halfHFull, a, hv.kind() == Kind.PLUS);
 			}
-			drawShopBox(b, m, center, right, up, halfHFull, a, hv.kind() == Kind.SHOP);
+			drawStatPanel(b, m, center, right, up, halfHFull, a, hv.kind() == Kind.STAT ? hv.index() : -1);
 		}
 
 		Tessellator.getInstance().draw();
@@ -356,22 +360,53 @@ public class StatusRenderer {
 		quad(b, m, c, right, up, cx - th, cy - len, cx + th, cy + len, line, line);
 	}
 
-	private static void drawShopBox(BufferBuilder b, Matrix4f m, Vec3d c, Vec3d right, Vec3d up,
-									double halfHFull, float alpha, boolean hovered) {
-		double x0 = -HALF_W + SHOP_X0 * SCALE;
-		double x1 = -HALF_W + SHOP_X1 * SCALE;
-		double yTop = halfHFull - SHOP_Y0 * SCALE;
-		double yBot = halfHFull - SHOP_Y1 * SCALE;
+	private static void drawStatPanel(BufferBuilder b, Matrix4f m, Vec3d c, Vec3d right, Vec3d up,
+									  double halfHFull, float alpha, int hoverRow) {
+		double x0 = -HALF_W + ST_X0 * SCALE;
+		double x1 = -HALF_W + ST_X1 * SCALE;
+		double yTop = halfHFull - ST_Y0 * SCALE;
+		double yBot = halfHFull - ST_Y1 * SCALE;
 
-		int fill = withAlpha(hovered ? 0xE04AB4F8 : 0xD02E9FF0, alpha);
-		int line = withAlpha(hovered ? 0xFF7CCBFF : 0xFF2E9FF0, alpha);
+		int fill = withAlpha(0xD02E9FF0, alpha);
+		int line = withAlpha(0xFF2E9FF0, alpha);
 		double e = 0.01;
-
 		quad(b, m, c, right, up, x0, yBot, x1, yTop, fill, fill);
 		quad(b, m, c, right, up, x0, yTop - e, x1, yTop, line, line);
 		quad(b, m, c, right, up, x0, yBot, x1, yBot + e, line, line);
 		quad(b, m, c, right, up, x0, yBot, x0 + e, yTop, line, line);
 		quad(b, m, c, right, up, x1 - e, yBot, x1, yTop, line, line);
+
+		boolean canSpend = OrvWindowClient.myStatPoints > 0;
+		for (int i = 0; i < 5; i++) {
+			double ry0 = halfHFull - (ST_ROW0 + i * ST_ROW_H) * SCALE;
+			double ry1 = halfHFull - (ST_ROW0 + (i + 1) * ST_ROW_H) * SCALE;
+			if (i == hoverRow) {
+				int hl = withAlpha(ROW_HIGHLIGHT, alpha);
+				quad(b, m, c, right, up, x0 + 4 * SCALE, ry1, x1 - 4 * SCALE, ry0, hl, hl);
+			}
+			if (!canSpend) {
+				continue;
+			}
+			double bx0 = -HALF_W + ST_BTN_X0 * SCALE;
+			double bx1 = -HALF_W + ST_BTN_X1 * SCALE;
+			double by0 = ry1 + 0.012;
+			double by1 = ry0 - 0.012;
+			boolean hv = i == hoverRow;
+			int bf = withAlpha(hv ? 0xFF2E9FF0 : 0xFF1B5FC8, alpha);
+			int bl = withAlpha(hv ? 0xFFA9DCFF : 0xFF52B3F5, alpha);
+			double t = 0.005;
+			quad(b, m, c, right, up, bx0, by0, bx1, by1, bf, bf);
+			quad(b, m, c, right, up, bx0, by1 - t, bx1, by1, bl, bl);
+			quad(b, m, c, right, up, bx0, by0, bx1, by0 + t, bl, bl);
+			quad(b, m, c, right, up, bx0, by0, bx0 + t, by1, bl, bl);
+			quad(b, m, c, right, up, bx1 - t, by0, bx1, by1, bl, bl);
+			double cx = (bx0 + bx1) / 2.0;
+			double cy = (by0 + by1) / 2.0;
+			double len = Math.min(bx1 - bx0, by1 - by0) * 0.30;
+			double th = 0.005;
+			quad(b, m, c, right, up, cx - len, cy - th, cx + len, cy + th, bl, bl);
+			quad(b, m, c, right, up, cx - th, cy - len, cx + th, cy + len, bl, bl);
+		}
 	}
 
 	private static void drawText(MinecraftClient mc, Matrix4f m, Vec3d center, Vec3d right, Vec3d up, Vec3d f,
@@ -406,13 +441,22 @@ public class StatusRenderer {
 					TextRenderer.TextLayerType.SEE_THROUGH, 0, 0xF000F0);
 		}
 
-		// shop box beside the window
-		String shopLabel = "SHOP";
-		String shopPoints = "SP " + OrvWindowClient.myPoints;
-		float boxW = SHOP_X1 - SHOP_X0;
-		tr.draw(shopLabel, SHOP_X0 + (boxW - tr.getWidth(shopLabel)) / 2f, SHOP_Y0 + 8f, color, true, tm, TEXT,
+		// stat panel beside the window
+		float boxW = ST_X1 - ST_X0;
+		Text head = Text.translatable("orvwindow.stat.title");
+		tr.draw(head, ST_X0 + (boxW - tr.getWidth(head)) / 2f, ST_Y0 + 5f, color, true, tm, TEXT,
 				TextRenderer.TextLayerType.SEE_THROUGH, 0, 0xF000F0);
-		tr.draw(shopPoints, SHOP_X0 + (boxW - tr.getWidth(shopPoints)) / 2f, SHOP_Y0 + 21f, color, true, tm, TEXT,
+		String[] names = {"STR", "DEX", "INT", "CON", "WIL"};
+		int[] stats = OrvWindowClient.myStats;
+		for (int i = 0; i < 5; i++) {
+			float ry = ST_ROW0 + i * ST_ROW_H + 3f;
+			tr.draw(names[i], ST_X0 + 8f, ry, color, true, tm, TEXT, TextRenderer.TextLayerType.SEE_THROUGH, 0, 0xF000F0);
+			String v = String.valueOf(stats[i]);
+			float vx = OrvWindowClient.myStatPoints > 0 ? ST_BTN_X0 - 6f - tr.getWidth(v) : ST_X1 - 10f - tr.getWidth(v);
+			tr.draw(v, vx, ry, color, true, tm, TEXT, TextRenderer.TextLayerType.SEE_THROUGH, 0, 0xF000F0);
+		}
+		Text pts = Text.translatable("orvwindow.stat.points", OrvWindowClient.myStatPoints);
+		tr.draw(pts, ST_X0 + (boxW - tr.getWidth(pts)) / 2f, ST_ROW0 + 5 * ST_ROW_H + 5f, color, true, tm, TEXT,
 				TextRenderer.TextLayerType.SEE_THROUGH, 0, 0xF000F0);
 		TEXT.draw();
 	}

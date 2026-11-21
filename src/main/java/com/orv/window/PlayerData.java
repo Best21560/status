@@ -24,8 +24,6 @@ public class PlayerData {
 	public static int gender = 2;
 
 	// ---- fixed values for now ----
-	public static final int LEVEL = 1;
-	public static final int EXP_PERCENT = 0;
 
 	/** Row (0-based) of the "unique skill" line; the + button sits on this row. */
 	public static final int UNIQUE_ROW = 4;
@@ -101,7 +99,8 @@ public class PlayerData {
 		String cid = OrvWindowClient.myClass;
 		l.add(Text.translatable("orvwindow.line.class",
 				cid.isEmpty() ? Text.literal("-") : Text.translatable("orvwindow.class." + cid)));
-		l.add(Text.translatable("orvwindow.line.level", LEVEL, EXP_PERCENT));
+		l.add(Text.translatable("orvwindow.line.level", OrvWindowClient.myLevel,
+				OrvWindowClient.myXpNeed <= 0 ? 100 : (int) (100L * OrvWindowClient.myXp / OrvWindowClient.myXpNeed)));
 		l.add(Text.translatable("orvwindow.line.unique")); // must stay at index UNIQUE_ROW
 
 		List<Passives.Def> have = ownedDefs();

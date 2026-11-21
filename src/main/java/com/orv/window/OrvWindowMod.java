@@ -29,9 +29,11 @@ public class OrvWindowMod implements ModInitializer {
 	public static final Identifier STATE = new Identifier("orvwindow", "state");
 	/** client -> server: (skill id, add?) from an op. */
 	public static final Identifier GRANT = new Identifier("orvwindow", "grant");
-	/** client -> server: buy a passive in the shop with skill points. */
-	public static final Identifier BUY = new Identifier("orvwindow", "buy");
-	/** server -> client: the passives this player owns + skill points. */
+	/** server -> client: level, xp, xp needed, stat points, 5 stats. */
+	public static final Identifier LEVEL = new Identifier("orvwindow", "level");
+	/** client -> server: spend one stat point (stat index 0-4). */
+	public static final Identifier STAT_UP = new Identifier("orvwindow", "stat_up");
+	/** server -> client: the passives this player owns. */
 	public static final Identifier SKILLS = new Identifier("orvwindow", "skills");
 	/** server -> client: Mana, max Mana, Stamina, max Stamina, exhausted. */
 	public static final Identifier VITALS = new Identifier("orvwindow", "vitals");
@@ -101,27 +103,9 @@ public class OrvWindowMod implements ModInitializer {
 			});
 		});
 
-		ServerPlayNetworking.registerGlobalReceiver(BUY, (server, player, handler, buf, responseSender) -> {
-			String skill = buf.readString(64);
-			server.execute(() -> {
-				Passives.Def def = Passives.get(skill);
-				if (def == null) {
-					return;
-				}
-				SkillState st = SkillState.get(server);
-				UUID id = player.getUuid();
-				if (st.skillsOf(id).contains(skill)) {
-					return;
-				}
-				int cost = def.cost();
-				if (st.pointsOf(id) < cost) {
-					player.sendMessage(Text.translatable("orvwindow.shop.no_points"), true);
-					return;
-				}
-				st.addPoints(id, -cost);
-				st.add(id, skill);
-				sendSkills(player, st);
-			});
+		ServerPlayNetworking.registerGlobalReceiver(STAT_UP, (server, player, handler, buf, responseSender) -> {
+			int idx = buf.readVarInt();
+			server.execute(() -> LevelEngine.spend(player, PassiveEngine.res(player.getUuid()), idx));
 		});
 
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
@@ -129,6 +113,7 @@ public class OrvWindowMod implements ModInitializer {
 				send(handler.player, id, true);
 			}
 			SkillState st = SkillState.get(server);
+			PassiveEngine.res(handler.player.getUuid()).lvLoaded = false; // level data is re-sent by LevelEngine.tick
 			sendSkills(handler.player, st);
 			String cls = st.classOf(handler.player.getUuid());
 			PassiveEngine.setClass(handler.player.getUuid(), cls, false);
@@ -170,18 +155,34 @@ public class OrvWindowMod implements ModInitializer {
 								.then(CommandManager.argument("players", EntityArgumentType.players())
 										.executes(ctx -> changeClass(ctx, ""))))));
 
-		// /skillpoints add <players> <amount>   /skillpoints set <players> <amount>   (ops only)
+		// /orvlevel set <players> <level>   /orvlevel addxp <players> <amount>   (ops only)
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
-				dispatcher.register(CommandManager.literal("skillpoints")
+				dispatcher.register(CommandManager.literal("orvlevel")
 						.requires(src -> src.hasPermissionLevel(2))
-						.then(CommandManager.literal("add")
-								.then(CommandManager.argument("players", EntityArgumentType.players())
-										.then(CommandManager.argument("amount", IntegerArgumentType.integer(-100000, 100000))
-												.executes(ctx -> changePoints(ctx, false)))))
 						.then(CommandManager.literal("set")
 								.then(CommandManager.argument("players", EntityArgumentType.players())
-										.then(CommandManager.argument("amount", IntegerArgumentType.integer(0, 100000))
-												.executes(ctx -> changePoints(ctx, true)))))));
+										.then(CommandManager.argument("level", IntegerArgumentType.integer(1, LevelEngine.MAX_LEVEL))
+												.executes(ctx -> {
+													int lvl = IntegerArgumentType.getInteger(ctx, "level");
+													Collection<ServerPlayerEntity> t = EntityArgumentType.getPlayers(ctx, "players");
+													for (ServerPlayerEntity p : t) {
+														LevelEngine.setLevel(p, PassiveEngine.res(p.getUuid()), lvl);
+													}
+													ctx.getSource().sendFeedback(() -> Text.translatable("orvwindow.cmd.level_set", t.size(), lvl), true);
+													return t.size();
+												}))))
+						.then(CommandManager.literal("addxp")
+								.then(CommandManager.argument("players", EntityArgumentType.players())
+										.then(CommandManager.argument("amount", IntegerArgumentType.integer(1, 1000000))
+												.executes(ctx -> {
+													int amt = IntegerArgumentType.getInteger(ctx, "amount");
+													Collection<ServerPlayerEntity> t = EntityArgumentType.getPlayers(ctx, "players");
+													for (ServerPlayerEntity p : t) {
+														LevelEngine.addXp(p, PassiveEngine.res(p.getUuid()), amt);
+													}
+													ctx.getSource().sendFeedback(() -> Text.translatable("orvwindow.cmd.xp_added", t.size(), amt), true);
+													return t.size();
+												}))))));
 	}
 
 	private static int changeClass(CommandContext<ServerCommandSource> ctx, String cls) throws CommandSyntaxException {
@@ -207,24 +208,6 @@ public class OrvWindowMod implements ModInitializer {
 		ServerPlayNetworking.send(player, CLASS, out);
 	}
 
-	private static int changePoints(CommandContext<ServerCommandSource> ctx, boolean set) throws CommandSyntaxException {
-		Collection<ServerPlayerEntity> targets = EntityArgumentType.getPlayers(ctx, "players");
-		int amount = IntegerArgumentType.getInteger(ctx, "amount");
-		SkillState st = SkillState.get(ctx.getSource().getServer());
-		for (ServerPlayerEntity p : targets) {
-			if (set) {
-				st.setPoints(p.getUuid(), amount);
-			} else {
-				st.addPoints(p.getUuid(), amount);
-			}
-			sendSkills(p, st);
-		}
-		int count = targets.size();
-		ctx.getSource().sendFeedback(() -> Text.translatable(
-				set ? "orvwindow.cmd.points_set" : "orvwindow.cmd.points_added", count, amount), true);
-		return count;
-	}
-
 	private static void sendSkills(ServerPlayerEntity player, SkillState st) {
 		Set<String> owned = st.skillsOf(player.getUuid());
 		PassiveEngine.setOwned(player.getUuid(), new java.util.HashSet<>(owned));
@@ -233,7 +216,6 @@ public class OrvWindowMod implements ModInitializer {
 		for (String s : owned) {
 			out.writeString(s);
 		}
-		out.writeVarInt(st.pointsOf(player.getUuid()));
 		ServerPlayNetworking.send(player, SKILLS, out);
 	}
 

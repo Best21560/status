@@ -36,8 +36,12 @@ public class OrvWindowClient implements ClientModInitializer {
 	public static final Map<UUID, WindowAnim> OTHERS = new ConcurrentHashMap<>();
 	/** Passive skills I own (ids), synced from the server. */
 	public static volatile Set<String> mySkills = Set.of();
-	/** Skill points I can spend in the shop, synced from the server. */
-	public static volatile int myPoints = 0;
+	/** My mod level, XP, XP needed for the next level, unspent stat points and stats (STR, DEX, INT, CON, WILL). */
+	public static volatile int myLevel = 1;
+	public static volatile int myXp = 0;
+	public static volatile int myXpNeed = 30;
+	public static volatile int myStatPoints = 0;
+	public static volatile int[] myStats = new int[5];
 	/** Mana / Stamina, synced from the server (HP comes from the player itself). */
 	public static volatile float mana = 100f;
 	public static volatile float maxMana = 100f;
@@ -258,10 +262,24 @@ public class OrvWindowClient implements ClientModInitializer {
 			for (int i = 0; i < n; i++) {
 				set.add(buf.readString(64));
 			}
-			int pts = buf.readVarInt();
+			client.execute(() -> mySkills = set);
+		});
+
+		ClientPlayNetworking.registerGlobalReceiver(OrvWindowMod.LEVEL, (client, handler, buf, responseSender) -> {
+			int lv = buf.readVarInt();
+			int xp = buf.readVarInt();
+			int need = buf.readVarInt();
+			int sp = buf.readVarInt();
+			int[] st = new int[5];
+			for (int i = 0; i < 5; i++) {
+				st[i] = buf.readVarInt();
+			}
 			client.execute(() -> {
-				mySkills = set;
-				myPoints = pts;
+				myLevel = lv;
+				myXp = xp;
+				myXpNeed = need;
+				myStatPoints = sp;
+				myStats = st;
 			});
 		});
 
@@ -273,7 +291,11 @@ public class OrvWindowClient implements ClientModInitializer {
 			SELF.reset();
 			OTHERS.clear();
 			mySkills = Set.of();
-			myPoints = 0;
+			myLevel = 1;
+			myXp = 0;
+			myXpNeed = 30;
+			myStatPoints = 0;
+			myStats = new int[5];
 			mana = 100f;
 			maxMana = 100f;
 			stamina = 100f;
@@ -357,11 +379,11 @@ public class OrvWindowClient implements ClientModInitializer {
 		}
 	}
 
-	public static void sendBuy(String skillId) {
-		if (ClientPlayNetworking.canSend(OrvWindowMod.BUY)) {
+	public static void sendStatUp(int index) {
+		if (ClientPlayNetworking.canSend(OrvWindowMod.STAT_UP)) {
 			PacketByteBuf buf = PacketByteBufs.create();
-			buf.writeString(skillId);
-			ClientPlayNetworking.send(OrvWindowMod.BUY, buf);
+			buf.writeVarInt(index);
+			ClientPlayNetworking.send(OrvWindowMod.STAT_UP, buf);
 		}
 	}
 

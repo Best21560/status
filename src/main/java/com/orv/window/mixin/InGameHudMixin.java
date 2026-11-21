@@ -23,4 +23,10 @@ public abstract class InGameHudMixin {
 		com.orv.window.VitalsHud.statusBarsHidden = true;
 		ci.cancel();
 	}
+
+	/** The vanilla experience bar and level number are replaced by the mod Level (shown in the status window). */
+	@Inject(method = "renderExperienceBar", at = @At("HEAD"), cancellable = true)
+	private void orv$hideXpBar(DrawContext context, int x, CallbackInfo ci) {
+		ci.cancel();
+	}
 }

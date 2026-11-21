@@ -66,12 +66,13 @@ public class WindowScreen extends Screen {
 			switch (pk.kind()) {
 				case PLUS -> {
 					switchingToChild = true;
-					this.client.setScreen(new SkillPickerScreen(this, false));
+					this.client.setScreen(new SkillPickerScreen(this));
 					return true;
 				}
-				case SHOP -> {
-					switchingToChild = true;
-					this.client.setScreen(new SkillPickerScreen(this, true));
+				case STAT -> {
+					if (OrvWindowClient.myStatPoints > 0) {
+						OrvWindowClient.sendStatUp(pk.index());
+					}
 					return true;
 				}
 				case NAME -> {
@@ -134,10 +135,14 @@ public class WindowScreen extends Screen {
 			}
 			case NAME -> ctx.drawTooltip(this.textRenderer, List.of(Text.translatable("orvwindow.tip.name")), mouseX, mouseY);
 			case PLUS -> ctx.drawTooltip(this.textRenderer, List.of(Text.translatable("orvwindow.tip.plus")), mouseX, mouseY);
-			case SHOP -> ctx.drawTooltip(this.textRenderer, List.of(
-					Text.translatable("orvwindow.tip.shop"),
-					Text.translatable("orvwindow.shop.points", OrvWindowClient.myPoints).formatted(Formatting.YELLOW)
-			), mouseX, mouseY);
+			case STAT -> {
+				int i = Math.max(0, Math.min(4, pk.index()));
+				ctx.drawTooltip(this.textRenderer, List.of(
+						Text.translatable("orvwindow.stat.name." + i).formatted(Formatting.AQUA),
+						Text.translatable("orvwindow.stat.tip." + i),
+						Text.translatable("orvwindow.stat.points", OrvWindowClient.myStatPoints).formatted(Formatting.YELLOW)
+				), mouseX, mouseY);
+			}
 			default -> {
 			}
 		}

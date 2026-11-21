@@ -163,6 +163,7 @@ public final class Extras {
 	// ------------------------------------------------------------------ per tick
 
 	public static void tick(ServerPlayerEntity p, PlayerRes r, long now) {
+		LevelEngine.tick(p, r);
 		SlayerEngine.tick(p, r, now);
 		LightEngine.tick(p, r, now);
 		Vitality.tick(p, r, now);

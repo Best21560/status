@@ -21,6 +21,19 @@ public class SkillState extends PersistentState {
 	private final Map<UUID, Set<String>> data = new HashMap<>();
 	private final Map<UUID, Integer> points = new HashMap<>();
 	private final Map<UUID, String> classes = new HashMap<>();
+	private final Map<UUID, Lv> levels = new HashMap<>();
+
+	/** Level data of one player. */
+	public static class Lv {
+		public int level = 1;
+		public int xp = 0;
+		public int points = 0;
+		public int[] stats = new int[5];
+	}
+
+	public Lv lvOf(UUID id) {
+		return levels.computeIfAbsent(id, k -> new Lv());
+	}
 
 	/** Chosen class id, or "" if the player has not chosen yet. */
 	public String classOf(UUID id) {
@@ -75,6 +88,7 @@ public class SkillState extends PersistentState {
 		Set<UUID> everyone = new HashSet<>(data.keySet());
 		everyone.addAll(points.keySet());
 		everyone.addAll(classes.keySet());
+		everyone.addAll(levels.keySet());
 		NbtList players = new NbtList();
 		for (UUID id : everyone) {
 			NbtCompound p = new NbtCompound();
@@ -86,6 +100,13 @@ public class SkillState extends PersistentState {
 			p.put("skills", list);
 			p.putInt("points", pointsOf(id));
 			p.putString("class", classOf(id));
+			Lv lv = levels.get(id);
+			if (lv != null) {
+				p.putInt("lv", lv.level);
+				p.putInt("xp", lv.xp);
+				p.putInt("sp", lv.points);
+				p.putIntArray("stats", lv.stats);
+			}
 			players.add(p);
 		}
 		nbt.put("players", players);
@@ -105,6 +126,15 @@ public class SkillState extends PersistentState {
 			}
 			st.data.put(id, set);
 			st.points.put(id, p.getInt("points"));
+			if (p.contains("lv")) {
+				Lv lv = new Lv();
+				lv.level = Math.max(1, p.getInt("lv"));
+				lv.xp = p.getInt("xp");
+				lv.points = p.getInt("sp");
+				int[] s = p.getIntArray("stats");
+				System.arraycopy(s, 0, lv.stats, 0, Math.min(5, s.length));
+				st.levels.put(id, lv);
+			}
 			String cls = p.getString("class");
 			if (!cls.isEmpty()) {
 				st.classes.put(id, cls);

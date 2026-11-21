@@ -13,15 +13,13 @@ import java.util.Locale;
 
 /**
  * List of passives with tabs by category, search and scroll.
- * shop = false: op tool, click a row to add/remove it for free.
- * shop = true: the shop, click a row to buy it with skill points.
+ * Op tool: click a row to add/remove the passive for free.
  */
 public class SkillPickerScreen extends Screen {
 	private static final int ROW_H = 16;
 	private static final int COL_W = 190;
 
 	private final Screen parent;
-	private final boolean shop;
 	private int tab = 0; // 0 = all, 1.. = Passives.CATEGORIES.get(tab - 1)
 	private int scroll = 0;
 	private String query = "";
@@ -34,13 +32,9 @@ public class SkillPickerScreen extends Screen {
 	private int listBottom;
 	private int visibleRows;
 
-	private Text flash = null;
-	private long flashUntil = 0;
-
-	public SkillPickerScreen(Screen parent, boolean shop) {
-		super(shop ? Text.translatable("orvwindow.shop.title") : Text.translatable("orvwindow.picker.title"));
+	public SkillPickerScreen(Screen parent) {
+		super(Text.translatable("orvwindow.picker.title"));
 		this.parent = parent;
-		this.shop = shop;
 	}
 
 	@Override
@@ -151,18 +145,7 @@ public class SkillPickerScreen extends Screen {
 			if (idx >= 0) {
 				Passives.Def d = shown.get(idx);
 				boolean owned = OrvWindowClient.mySkills.contains(d.id());
-				if (shop) {
-					if (!owned) {
-						if (OrvWindowClient.myPoints < d.cost()) {
-							flash = Text.translatable("orvwindow.shop.no_points").formatted(Formatting.RED);
-							flashUntil = System.currentTimeMillis() + 2000;
-						} else {
-							OrvWindowClient.sendBuy(d.id());
-						}
-					}
-				} else {
-					OrvWindowClient.sendGrant(d.id(), !owned);
-				}
+				OrvWindowClient.sendGrant(d.id(), !owned);
 				return true;
 			}
 		}
@@ -184,12 +167,8 @@ public class SkillPickerScreen extends Screen {
 		this.renderBackground(ctx);
 		ctx.drawCenteredTextWithShadow(this.textRenderer, this.title, this.width / 2, 8, 0xFFFFFFFF);
 		ctx.drawCenteredTextWithShadow(this.textRenderer,
-				Text.translatable(shop ? "orvwindow.shop.hint" : "orvwindow.picker.hint"),
+				Text.translatable("orvwindow.picker.hint"),
 				this.width / 2, 19, 0xFF9FB4C8);
-		if (shop) {
-			Text pts = Text.translatable("orvwindow.shop.points", OrvWindowClient.myPoints);
-			ctx.drawTextWithShadow(this.textRenderer, pts, this.width - 10 - this.textRenderer.getWidth(pts), 8, 0xFFFFD35A);
-		}
 		super.render(ctx, mouseX, mouseY, delta);
 
 		int hover = indexAt(mouseX, mouseY);
@@ -206,21 +185,12 @@ public class SkillPickerScreen extends Screen {
 				int bg = idx == hover ? 0xB0305F8F : (owned ? 0x80204A28 : 0x80000000);
 				ctx.fill(x, y, x + COL_W - 4, y + ROW_H - 2, bg);
 				ctx.drawTextWithShadow(this.textRenderer, d.name(), x + 5, y + 4, owned ? 0xFF55FF55 : 0xFFFFFFFF);
-				if (shop && !owned) {
-					String cost = d.cost() + " SP";
-					int color = OrvWindowClient.myPoints >= d.cost() ? 0xFFFFD35A : 0xFFFF5555;
-					ctx.drawTextWithShadow(this.textRenderer, cost,
-							x + COL_W - 4 - 5 - this.textRenderer.getWidth(cost), y + 4, color);
-				}
 			}
 		}
 
 		ctx.drawTextWithShadow(this.textRenderer, Text.translatable("orvwindow.picker.count", shown.size()),
 				listLeft, this.height - 14, 0xFF9FB4C8);
 
-		if (flash != null && System.currentTimeMillis() < flashUntil) {
-			ctx.drawCenteredTextWithShadow(this.textRenderer, flash, this.width / 2, this.height - 14, 0xFFFF5555);
-		}
 
 		if (hover >= 0) {
 			ctx.drawTooltip(this.textRenderer, Passives.tooltip(shown.get(hover)), mouseX, mouseY);

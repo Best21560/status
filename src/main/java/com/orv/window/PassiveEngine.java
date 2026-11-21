@@ -199,11 +199,11 @@ public final class PassiveEngine {
 		if (r.ironMax > 0f) {
 			return r.ironMax;
 		}
-		return Classes.mana(r.classId) + (has(r, "mana_pool") ? 20f : 0f);
+		return Classes.mana(r.classId) + (has(r, "mana_pool") ? 20f : 0f) + r.stats[2] * LevelEngine.INT_MANA;
 	}
 
 	static float maxStamina(PlayerRes r) {
-		return Classes.stamina(r.classId) + (has(r, "stamina_mastery") ? 20f : 0f);
+		return Classes.stamina(r.classId) + (has(r, "stamina_mastery") ? 20f : 0f) + r.stats[4] * LevelEngine.WILL_STAMINA;
 	}
 
 	// ------------------------------------------------------------------ attack strength
@@ -269,6 +269,7 @@ public final class PassiveEngine {
 		if (a instanceof ServerPlayerEntity atk) {
 			out = LightEngine.attackerAdjust(atk, source, out);
 			out = attackerBonus(atk, victim, source, out, now);
+			out *= 1f + res(atk.getUuid()).stats[0] * LevelEngine.STR_DAMAGE;
 		}
 		if (a == null && !(victim instanceof PlayerEntity) && isTrapDamage(source)) {
 			PlayerEntity near = victim.getWorld().getClosestPlayer(victim, 16.0);
@@ -947,7 +948,7 @@ public final class PassiveEngine {
 	 */
 	private static void syncIronsMana(ServerPlayerEntity p, PlayerRes r) {
 		if (IronsLink.available() && !r.classId.isEmpty()) {
-			IronsLink.setClassMax(p, Classes.mana(r.classId) + (has(r, "mana_pool") ? 20f : 0f));
+			IronsLink.setClassMax(p, Classes.mana(r.classId) + (has(r, "mana_pool") ? 20f : 0f) + r.stats[2] * LevelEngine.INT_MANA);
 		}
 		float max = IronsLink.maxMana(p);
 		float cur = IronsLink.mana(p);
@@ -1229,6 +1230,11 @@ public final class PassiveEngine {
 		if (SlayerEngine.berserk(r, now)) {
 			speed += 0.12;
 		}
+		// level stats: CON = max HP, DEX = speed / attack speed, WILL = knockback resistance
+		maxHp += r.stats[3] * LevelEngine.CON_HP;
+		speed += Math.min(0.15, r.stats[1] * LevelEngine.DEX_SPEED);
+		atkSpeed += Math.min(0.20, r.stats[1] * LevelEngine.DEX_ATKSPD);
+		kb = Math.min(1.0, kb + r.stats[4] * LevelEngine.WILL_KB);
 
 		setMod(p, r, EntityAttributes.GENERIC_ATTACK_DAMAGE, U_ATK, "orv_class_attack", clsAttack, EntityAttributeModifier.Operation.ADDITION);
 		setMod(p, r, EntityAttributes.GENERIC_ARMOR, U_ARMOR, "orv_armor", armor, EntityAttributeModifier.Operation.ADDITION);

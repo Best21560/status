@@ -46,7 +46,7 @@ public final class SlayerEngine {
 	private static final int CUTSCENE_MAX = 100;
 	/** The Berserk cut-scene (3 seconds): charge, chest beating, roar, ground slam. */
 	private static final int INTRO_TICKS = 60;
-	private static final double LEAP_VY = 0.72;
+	private static final double LEAP_VY = 0.8;
 
 	public static boolean is(PlayerRes r) {
 		return ID.equals(r.classId);
@@ -277,27 +277,37 @@ public final class SlayerEngine {
 	// ------------------------------------------------------------------ 1. Slash
 
 	private static void slash(ServerPlayerEntity p, PlayerRes r, long now) {
-		if (!ready(p, r, SLASH, now) || !payStamina(p, r, 45f)) {
+		if (r.slashAt > 0 || !ready(p, r, SLASH, now) || !payStamina(p, r, 45f)) {
 			return;
 		}
 		r.cdEnd[SLASH] = now + CD[SLASH];
+		p.swingHand(Hand.MAIN_HAND, true);
+		EpicLink.play(p, r.slashFlip ? "GREATSWORD_AUTO2" : "GREATSWORD_AUTO1");
+		// heavy swing: the sword is pulled back first, the cut lands 6 ticks (0.3 s) later
+		anim(p, r.slashFlip ? PoseClient.SLASH_L : PoseClient.SLASH_R);
+		r.slashFlipNow = r.slashFlip;
+		r.slashFlip = !r.slashFlip;
+		r.slashAt = now + 6;
+	}
+
+	private static void tickSlash(ServerPlayerEntity p, PlayerRes r, long now) {
+		if (r.slashAt <= 0 || now < r.slashAt) {
+			return;
+		}
+		r.slashAt = 0;
 		ServerWorld w = p.getServerWorld();
 		Vec3d eye = p.getEyePos();
 		Vec3d look = p.getRotationVec(1f);
 		float dmg = base(p) * 1.8f;
-		p.swingHand(Hand.MAIN_HAND, true);
-		EpicLink.play(p, r.slashFlip ? "GREATSWORD_AUTO2" : "GREATSWORD_AUTO1");
-		anim(p, r.slashFlip ? PoseClient.SLASH_L : PoseClient.SLASH_R);
-		FxNet.send(w, FxNet.SLASH, eye.add(0, -0.3, 0), look, r.slashFlip ? -32f : 32f, 1);
-		r.slashFlip = !r.slashFlip;
-		for (LivingEntity e : candidates(p, 4.0)) {
+		FxNet.send(w, FxNet.SLASH, eye.add(0, -0.3, 0), look, r.slashFlipNow ? -20f : 168f, 1);
+		for (LivingEntity e : candidates(p, 4.2)) {
 			Vec3d to = chest(e).subtract(eye);
 			double d = to.length();
 			if (d > 1e-3 && to.multiply(1.0 / d).dotProduct(look) >= 0.3) {
 				float d2 = e.getHealth() < 0.4f * e.getMaxHealth() ? dmg * 1.5f : dmg;
 				strike(p, e, d2);
-				e.takeKnockback(0.5, -look.x, -look.z);
-				FxNet.send(w, FxNet.IMPACT, chest(e), look, 1f, 0);
+				e.takeKnockback(0.6, -look.x, -look.z);
+				FxNet.send(w, FxNet.IMPACT, chest(e), look, 1.2f, 0);
 			}
 		}
 	}
@@ -343,11 +353,7 @@ public final class SlayerEngine {
 		Vec3d dir = chest(t).subtract(p.getEyePos()).normalize();
 		p.swingHand(Hand.MAIN_HAND, true);
 		EpicLink.play(p, n % 2 == 0 ? "GREATSWORD_AUTO1" : "GREATSWORD_AUTO2");
-		anim(p, switch (n % 3) {
-			case 0 -> PoseClient.STAB;
-			case 1 -> PoseClient.SLASH_R;
-			default -> PoseClient.SLASH_L;
-		});
+		anim(p, last ? PoseClient.SLASH_R : (n % 2 == 0 ? PoseClient.FAST_R : PoseClient.FAST_L));
 		FxNet.send(w, FxNet.SLASH, p.getEyePos().add(0, -0.2, 0), dir, (n % 2 == 0 ? 40f : -40f) + n * 7f, last ? 2 : 0);
 		strike(p, t, base(p) * (last ? 1.1f : 0.75f));
 		if (last) {
@@ -487,6 +493,7 @@ public final class SlayerEngine {
 		r.fAir = true;
 		r.fStart = now;
 		r.fMaxEnd = now + 45;
+		r.fFlight = ticks;
 		r.fFell = false;
 		r.fLastY = from.y;
 		r.fTarget = t != null ? t.getUuid() : null;
@@ -517,8 +524,8 @@ public final class SlayerEngine {
 		Vec3d facing = r.fDest != null ? new Vec3d(r.fDest.x - pos.x, 0, r.fDest.z - pos.z) : p.getRotationVec(1f);
 		facing = facing.lengthSquared() < 0.04 ? new Vec3d(p.getRotationVec(1f).x, 0, p.getRotationVec(1f).z) : facing;
 		facing = facing.lengthSquared() < 1e-6 ? new Vec3d(0, 0, 1) : facing.normalize();
-		if (!r.fFell && t >= 3 && pos.y < r.fLastY - 0.02) {
-			// at the top: the blade comes down
+		if (!r.fFell && t >= Math.max(4, r.fFlight - 6)) {
+			// after the spin: the blade comes down
 			r.fFell = true;
 			anim(p, PoseClient.SLAM);
 			p.swingHand(Hand.MAIN_HAND, true);
@@ -749,6 +756,7 @@ public final class SlayerEngine {
 		PlayerRes r = PassiveEngine.res(p.getUuid());
 		r.bIntroStart = 0;
 		r.fAir = false;
+		r.slashAt = 0;
 		if (r.jTarget != null) {
 			Entity e = p.getServerWorld().getEntity(r.jTarget);
 			if (e instanceof LivingEntity le) {
@@ -779,6 +787,7 @@ public final class SlayerEngine {
 		tickCounter(p, r, now);
 		tickJudgment(p, r, now);
 		tickFatal(p, r, now);
+		tickSlash(p, r, now);
 
 		if (r.bIntroStart > 0) {
 			tickIntro(p, r, now);
