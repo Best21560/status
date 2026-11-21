@@ -44,7 +44,7 @@ public final class SlayerEngine {
 	public static final int FATAL = 3;
 	public static final int JUDGMENT = 4;
 
-	private static final int CUTSCENE_MAX = 530;
+	private static final int CUTSCENE_MAX = 232;
 	/** The Berserk cut-scene (3 seconds): charge, chest beating, roar, ground slam. */
 	private static final int INTRO_TICKS = 60;
 	private static final double LEAP_VY = 0.8;
@@ -707,7 +707,6 @@ public final class SlayerEngine {
 		stun(t, r);
 		org.slf4j.LoggerFactory.getLogger("orvwindow").info("[orvwindow] Final Judgment (26.5 s cut-scene) started, build 2");
 		FxNet.sendTo(p, FxNet.CUTSCENE_START, p.getPos(), flat, (float) t.getId(), 3);
-		FxNet.send(p.getServerWorld(), FxNet.CHARGE, p.getPos(), Vec3d.ZERO, 0f, 0);
 	}
 
 	private static void moveTo(Entity e, Vec3d pos, float yaw, float pitch) {
@@ -725,9 +724,9 @@ public final class SlayerEngine {
 		return x * x * (3 - 2 * x);
 	}
 
-	/** Final Judgment: the 26.5 second cut-scene. Times in ticks; the camera (CutsceneCam, script 2) follows the same clock. */
-	private static final int[] J_HIT_T = {184, 192, 200, 208, 216, 224, 232, 240, 360, 448, 456, 464, 472, 480, 490, 510};
-	private static final float[] J_HIT_F = {.03f, .03f, .03f, .03f, .03f, .03f, .04f, .06f, .12f, .04f, .04f, .04f, .04f, .04f, .10f, .30f};
+	/** Final Judgment: an 11.5 second cut-scene (3 s star intro, then only the sword work). Times in ticks; CutsceneCam script 2 uses the same clock. */
+	private static final int[] J_HIT_T = {70, 76, 82, 88, 94, 100, 106, 112, 130, 150, 156, 162, 168, 174, 186, 205};
+	private static final float[] J_HIT_F = {.03f, .03f, .03f, .03f, .03f, .03f, .04f, .08f, .14f, .04f, .04f, .04f, .04f, .04f, .12f, .30f};
 
 	private static Vec3d rotY(Vec3d v, double ang) {
 		double c = Math.cos(ang);
@@ -757,75 +756,42 @@ public final class SlayerEngine {
 		Vec3d a = new Vec3d(q.x - r.jFrom.x, 0, q.z - r.jFrom.z);
 		a = a.lengthSquared() < 1e-4 ? new Vec3d(0, 0, 1) : a.normalize();
 
-		// the target stays where it was; from 19 s on it floats 2.5 blocks up
-		double tLift = t < 380 ? 0.0 : (t < 420 ? 2.5 * ease((t - 380) / 40.0) : 2.5);
-		Vec3d tp = new Vec3d(q.x, q.y + tLift, q.z);
+		Vec3d tp = q;
 		if (alive) {
 			moveTo(target, tp, target.getYaw(), target.getPitch());
 		}
 
 		// where the Slayer is
 		Vec3d sp;
-		if (t < 180) {
+		if (t < 64) {
 			sp = q.subtract(a.multiply(3.2));
-		} else if (t < 240) {
-			double ang = (t - 180) / 60.0 * Math.PI * 1.6;
+		} else if (t < 70) {
+			sp = lerp3(q.subtract(a.multiply(3.2)), q.subtract(a.multiply(1.7)), ease((t - 64) / 6.0));
+		} else if (t < 116) {
+			double ang = (t - 70) / 46.0 * Math.PI * 1.6;
 			sp = q.add(rotY(a.multiply(-1), ang).multiply(1.7));
-		} else if (t < 260) {
+		} else if (t < 130) {
 			sp = q.subtract(a.multiply(2.2));
-		} else if (t < 350) {
-			double rise = 2.6 * ease((t - 260) / 12.0);
-			sp = q.subtract(a.multiply(3.0)).add(0, rise, 0);
-		} else if (t < 358) {
-			sp = lerp3(q.subtract(a.multiply(3.0)).add(0, 2.6, 0), q.add(a.multiply(2.4)), ease((t - 350) / 8.0));
-		} else if (t < 380) {
-			sp = q.add(a.multiply(2.4));
-		} else if (t < 410) {
-			double k = ease((t - 380) / 30.0);
-			sp = q.add(a.multiply(2.4 + 7.0 * k)).add(0, 3.0 * k, 0);
-		} else if (t < 440) {
-			sp = q.add(a.multiply(9.4)).add(0, 3.0 + 0.2 * Math.sin((t - 410) * 0.2), 0);
-		} else if (t < 448) {
-			double k = ease((t - 440) / 8.0);
-			sp = lerp3(q.add(a.multiply(9.4)).add(0, 3.0, 0), tp.add(rotY(a, 0.0).multiply(1.8)), k);
-		} else if (t < 500) {
-			double ang = (t - 448) * 0.38;
-			sp = tp.add(rotY(a, ang).multiply(1.8));
+		} else if (t < 146) {
+			sp = q.subtract(a.multiply(2.2));
+		} else if (t < 152) {
+			sp = lerp3(q.subtract(a.multiply(2.2)), q.add(a.multiply(1.8)), ease((t - 146) / 6.0));
+		} else if (t < 200) {
+			sp = q.add(rotY(a, (t - 152) * 0.13).multiply(1.8));
 		} else {
-			sp = tp.subtract(a.multiply(3.0));
+			sp = q.subtract(a.multiply(3.0));
 		}
 		float[] yp = angles(sp.add(0, 1.6, 0), tp.add(0, 1.0, 0));
 		moveTo(p, sp, yp[0], yp[1]);
 
 		// events
-		if (t == 100) {
-			anim(p, PoseClient.ROAR);
-			FxNet.send(w, FxNet.CHARGE, sp, Vec3d.ZERO, 0f, 0);
-		} else if (t == 150) {
+		if (t == 60) {
 			FxNet.sendTo(p, FxNet.FLASH, sp, Vec3d.ZERO, 1f, 0);
-		} else if (t == 160) {
 			FxNet.send(w, FxNet.BERSERK_START, sp, Vec3d.ZERO, 0f, 0);
-		} else if (t == 180) {
-			FxNet.send(w, FxNet.DASH, sp.add(0, 1.0, 0), a.multiply(-1.6), 0f, 1);
+		} else if (t == 64 || t == 146) {
+			FxNet.send(w, FxNet.DASH, sp.add(0, 1.0, 0), a.multiply(1.6), 0f, 1);
 			anim(p, PoseClient.DASH);
-		} else if (t == 260) {
-			anim(p, PoseClient.LEAP);
-		} else if (t == 280 || t == 310) {
-			FxNet.send(w, FxNet.WAVE_CHARGE, sp.add(0, 2.4, 0), a, 0f, p.getId());
-		} else if (t == 330) {
-			FxNet.send(w, FxNet.SHOCK, new Vec3d(q.x, q.y + 0.05, q.z), Vec3d.ZERO, 8f, 2);
-			FxNet.sendTo(p, FxNet.FLASH, sp, Vec3d.ZERO, 1f, 0);
-		} else if (t == 340) {
-			FxNet.send(w, FxNet.BERSERK_START, sp, Vec3d.ZERO, 0f, 0);
-		} else if (t == 350) {
-			FxNet.send(w, FxNet.DASH, sp.add(0, 1.0, 0), a.multiply(5.4), 0f, 1);
-			anim(p, PoseClient.DASH);
-		} else if (t == 380) {
-			anim(p, PoseClient.DASH);
-		} else if (t == 440) {
-			FxNet.send(w, FxNet.DASH, sp.add(0, 1.0, 0), tp.subtract(sp), 0f, 1);
-			anim(p, PoseClient.DASH);
-		} else if (t == 520) {
+		} else if (t == 218) {
 			FxNet.sendTo(p, FxNet.FLASH, sp, Vec3d.ZERO, 1f, 0);
 		}
 

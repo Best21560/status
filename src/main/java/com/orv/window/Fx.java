@@ -212,6 +212,9 @@ public final class Fx {
 		SoundEvent s = null;
 		float vol = 1f;
 		float pitch = 0.95f + RAND.nextFloat() * 0.2f;
+		if (CutsceneCam.judgment() && judgmentSound(mc, type, p, a, b)) {
+			return;
+		}
 		switch (type) {
 			case FxNet.SLASH -> {
 				s = OrvSounds.SLASH;
@@ -291,6 +294,43 @@ public final class Fx {
 		}
 	}
 
+	/** Final Judgment uses its own sounds (made for the cut-scene). Returns true when the packet was handled. */
+	private static boolean judgmentSound(MinecraftClient mc, int type, Vec3d p, float a, int b) {
+		float pitch = 0.96f + RAND.nextFloat() * 0.08f;
+		switch (type) {
+			case FxNet.SLASH -> {
+				if (b == 2) {
+					mc.world.playSound(p.x, p.y, p.z, OrvSounds.JHEAVY, SoundCategory.PLAYERS, 1.6f, pitch, false);
+				} else {
+					mc.world.playSound(p.x, p.y, p.z, OrvSounds.JSLASH, SoundCategory.PLAYERS, 1.2f, 0.9f + RAND.nextFloat() * 0.25f, false);
+				}
+				return true;
+			}
+			case FxNet.IMPACT, FxNet.DASH -> {
+				if (type == FxNet.DASH) {
+					mc.world.playSound(p.x, p.y, p.z, OrvSounds.DASH, SoundCategory.PLAYERS, 0.7f, 1.1f, false);
+				}
+				return true; // the slash sounds already carry the hit
+			}
+			case FxNet.BERSERK_START -> {
+				mc.world.playSound(p.x, p.y, p.z, OrvSounds.JFLARE, SoundCategory.PLAYERS, 1.8f, 1f, false);
+				return true;
+			}
+			case FxNet.SHOCK -> {
+				if (a >= 12f) {
+					mc.world.playSound(p.x, p.y, p.z, OrvSounds.JFINAL, SoundCategory.PLAYERS, 2.2f, 1f, false);
+				}
+				return true;
+			}
+			case FxNet.WAVE, FxNet.CHARGE, FxNet.WAVE_CHARGE -> {
+				return true;
+			}
+			default -> {
+				return false;
+			}
+		}
+	}
+
 	static void vignettePublic(DrawContext ctx, int w, int h, int rgb, float strength) {
 		vignette(ctx, w, h, rgb, strength);
 	}
@@ -316,6 +356,7 @@ public final class Fx {
 			CutsceneCam.start(1, targetId);
 		} else if (kind == 3) {
 			CutsceneCam.start(2, targetId);
+			mc.getSoundManager().play(net.minecraft.client.sound.PositionedSoundInstance.master(OrvSounds.JSTAR, 1f, 1f));
 		}
 		mc.options.setPerspective(front ? Perspective.THIRD_PERSON_FRONT : Perspective.THIRD_PERSON_BACK);
 	}

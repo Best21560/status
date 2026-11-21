@@ -15,13 +15,13 @@ public final class CutsceneCam {
 	private CutsceneCam() {
 	}
 
-	/** Script 0 = Berserk (5.2 s), script 1 = Relentless Pursuit (3.8 s), script 2 = Final Judgment (26.5 s, same clock as SlayerEngine.tickJudgment). */
+	/** Script 0 = Berserk (5.2 s), script 1 = Relentless Pursuit (3.8 s), script 2 = Final Judgment (11.5 s, same clock as SlayerEngine.tickJudgment). */
 	private static final float[][] CUT_TABLE = {
 			{0f, 0.9f, 1.8f, 2.6f, 2.7f, 3.7f, 4.5f},
 			{0f, 0.5f, 0.85f, 1.1f, 1.35f, 1.6f, 1.9f, 2.25f, 3.0f},
-			{0f, 4.5f, 5f, 7.5f, 9f, 12f, 13f, 16.5f, 17.5f, 19f, 22f, 24.5f, 25.5f}
+			{0f, 3f, 3.5f, 5.8f, 6.5f, 7.3f, 9.8f, 10.5f}
 	};
-	private static final float[] TOTALS = {5.2f, 3.8f, 26.5f};
+	private static final float[] TOTALS = {5.2f, 3.8f, 11.5f};
 	private static int script = 0;
 	private static int targetId = -1;
 
@@ -43,6 +43,11 @@ public final class CutsceneCam {
 
 	public static float time() {
 		return t0 == 0 ? -1f : (System.nanoTime() - t0) / 1_000_000_000f;
+	}
+
+	/** True while the Final Judgment cut-scene runs (its own sound set is used then). */
+	public static boolean judgment() {
+		return script == 2 && active();
 	}
 
 	public static boolean active() {
@@ -317,7 +322,10 @@ public final class CutsceneCam {
 		}
 	}
 
-	/** Final Judgment: 13 shots following the server timeline (P = the Slayer, Q = the target). */
+	/** Maps the 8 shots of the Judgment script to the shot designs below. */
+	private static final int[] JMAP = {0, 3, 4, 8, 9, 10, 11, 12};
+
+	/** Final Judgment: 8 shots following the server timeline (P = the Slayer, Q = the target). */
 	private static void applyJudgment(Camera cam, Vec3d p, Vec3d f, int s, float k, float t, float td) {
 		Vec3d q = p.add(f.multiply(3.0));
 		net.minecraft.client.world.ClientWorld w = MinecraftClient.getInstance().world;
@@ -337,7 +345,7 @@ public final class CutsceneCam {
 		double h = 1;
 		double ty = 1.4;
 		float fv = 60f;
-		switch (s) {
+		switch (JMAP[s]) {
 			case 0 -> { // night sky: looking up at the lone Slayer
 				fwd = a.multiply(-1);
 				dist = lerp(3.5f, 2.6f, k);
@@ -461,6 +469,100 @@ public final class CutsceneCam {
 		return active() ? fov : -1;
 	}
 
+	/** Night sky: gradient, many dim stars with twinkle and slow drift, one shooting star and a single bright star that blooms. */
+	private static void starSky(net.minecraft.client.gui.DrawContext ctx, int w, int h, float t) {
+		float fade = t < 3f ? 1f : Math.max(0f, 1f - (t - 3f) / 0.25f);
+		float in = Math.min(1f, t / 0.6f);
+		float g = fade * in;
+		// vertical gradient: near black on top, deep blue towards the horizon
+		int bands = 24;
+		for (int i = 0; i < bands; i++) {
+			float k = i / (float) (bands - 1);
+			int rgb = ((int) (2 + 10 * k * k) << 16) | ((int) (4 + 18 * k * k) << 8) | (int) (10 + 40 * k * k);
+			ctx.fill(0, h * i / bands, w, h * (i + 1) / bands, Fx.argb(rgb, 0.93f * g));
+		}
+		// faint milky band
+		for (int i = 0; i < 60; i++) {
+			float u = Fx.rnd(7100, i);
+			float x = u * w;
+			float y = h * (0.75f - 0.55f * u) + (Fx.rnd(7101, i) - 0.5f) * h * 0.12f;
+			int rad = 14 + (int) (Fx.rnd(7102, i) * 26);
+			ctx.fill((int) x - rad, (int) y - rad / 3, (int) x + rad, (int) y + rad / 3, Fx.argb(0x8FA6D8, 0.025f * g));
+		}
+		// stars: mostly tiny and dim, a few brighter; the whole sky drifts slowly
+		float drift = t * 3f;
+		for (int i = 0; i < 260; i++) {
+			float b = Fx.rnd(7001, i);
+			float mag = b * b * b;
+			float sx = ((Fx.rnd(7002, i) * w + drift * (0.4f + b)) % w + w) % w;
+			float sy = Fx.rnd(7003, i) * h * 0.92f;
+			float tw = 0.75f + 0.25f * (float) Math.sin(t * (2 + Fx.rnd(7004, i) * 5) + i * 1.7f);
+			float al = (0.18f + 0.82f * mag) * tw * g;
+			int tint = Fx.rnd(7005, i) > 0.5f ? 0xFFEBD6 : 0xCFE0FF;
+			int sz = mag > 0.55f ? 2 : 1;
+			ctx.fill((int) sx, (int) sy, (int) sx + sz, (int) sy + sz, Fx.argb(tint, al));
+			if (mag > 0.8f) {
+				ctx.fill((int) sx - 2, (int) sy, (int) sx + 3, (int) sy + 1, Fx.argb(tint, al * 0.3f));
+				ctx.fill((int) sx, (int) sy - 2, (int) sx + 1, (int) sy + 3, Fx.argb(tint, al * 0.3f));
+			}
+		}
+		// one shooting star around 1.2 - 1.6 s
+		float ss = (t - 1.2f) / 0.4f;
+		if (ss > 0f && ss < 1f) {
+			float hx = w * (0.15f + 0.35f * ss);
+			float hy = h * (0.10f + 0.16f * ss);
+			for (int j = 0; j < 26; j++) {
+				float kk = j / 26f;
+				ctx.fill((int) (hx - j * 5), (int) (hy - j * 1.9f), (int) (hx - j * 5) + 3, (int) (hy - j * 1.9f) + 1, Fx.argb(0xFFFFFF, (1f - kk) * 0.8f * g));
+			}
+		}
+		// the bright star: grows from a dim point; soft round glow, thin spikes, slight warm core
+		float grow = Math.min(1f, Math.max(0f, (t - 0.4f) / 2.6f));
+		float e = grow * grow * (3 - 2 * grow);
+		int cx = w / 2 + (int) (Math.sin(t * 0.4) * 2);
+		int cy = (int) (h * 0.30f);
+		float sc = Math.max(1f, h / 240f);
+		float maxR = (12 + 230 * e) * sc;
+		for (int i = 18; i >= 1; i--) {
+			float k = i / 18f;
+			float rad = maxR * k * k;
+			float al = (0.012f + 0.05f * e) * (1.2f - k) * g;
+			int rr = (int) rad;
+			for (int dy = -rr; dy <= rr; dy += 2) {
+				int hw = (int) Math.sqrt(Math.max(0, rad * rad - dy * dy));
+				ctx.fill(cx - hw, cy + dy, cx + hw, cy + dy + 2, Fx.argb(0xBFD4FF, al));
+			}
+		}
+		int spike = (int) ((30 + 330 * e) * sc);
+		for (int j = 1; j < spike; j++) {
+			float al = (1f - j / (float) spike);
+			al = al * al * (0.45f + 0.4f * e) * g;
+			int th = j < spike * 0.25f ? 2 : 1;
+			ctx.fill(cx + j, cy - th / 2, cx + j + 1, cy + 1 + th / 2, Fx.argb(0xFFFFFF, al));
+			ctx.fill(cx - j - 1, cy - th / 2, cx - j, cy + 1 + th / 2, Fx.argb(0xFFFFFF, al));
+			if (j < spike * 0.6f) {
+				ctx.fill(cx - th / 2, cy + j, cx + 1 + th / 2, cy + j + 1, Fx.argb(0xFFFFFF, al * 0.8f));
+				ctx.fill(cx - th / 2, cy - j - 1, cx + 1 + th / 2, cy - j, Fx.argb(0xFFFFFF, al * 0.8f));
+			}
+			if (j < spike * 0.3f) { // fainter diagonal spikes
+				int dj = (int) (j * 0.7f);
+				float ad = al * 0.35f;
+				ctx.fill(cx + dj, cy + dj, cx + dj + 1, cy + dj + 1, Fx.argb(0xDDE6FF, ad));
+				ctx.fill(cx - dj, cy - dj, cx - dj + 1, cy - dj + 1, Fx.argb(0xDDE6FF, ad));
+				ctx.fill(cx + dj, cy - dj, cx + dj + 1, cy - dj + 1, Fx.argb(0xDDE6FF, ad));
+				ctx.fill(cx - dj, cy + dj, cx - dj + 1, cy + dj + 1, Fx.argb(0xDDE6FF, ad));
+			}
+		}
+		int core = (int) ((2 + 10 * e) * sc);
+		for (int i = core; i >= 1; i--) {
+			ctx.fill(cx - i, cy - i, cx + i, cy + i, Fx.argb(i == 1 ? 0xFFFFFF : 0xFFF3DC, (0.4f + 0.6f * (1f - i / (float) (core + 1))) * g));
+		}
+		// the blink of white right before the cut
+		if (t > 2.75f) {
+			ctx.fill(0, 0, w, h, Fx.argb(0xFFFFFF, Math.min(1f, (t - 2.75f) / 0.25f) * (t < 3f ? 1f : fade)));
+		}
+	}
+
 	/** Screen effects of the shots: horizontal speed lines on the wide shots and a pulsing dark red edge on the close-ups. */
 	public static void hud(net.minecraft.client.gui.DrawContext ctx, int w, int h) {
 		float t = time();
@@ -468,8 +570,8 @@ public final class CutsceneCam {
 			return;
 		}
 		int s = shot(t);
-		boolean lines = script == 0 ? (s == 2 || s == 3 || s == 5) : script == 1 ? (s == 1 || s == 4 || s == 7) : (s == 4 || s == 7 || s == 9 || s == 11);
-		boolean close = script == 0 ? (s == 0 || s == 4) : script == 1 ? (s == 0 || s == 6) : (s == 2 || s == 10);
+		boolean lines = script == 0 ? (s == 2 || s == 3 || s == 5) : script == 1 ? (s == 1 || s == 4 || s == 7) : (s == 2 || s == 4 || s == 6);
+		boolean close = script == 0 ? (s == 0 || s == 4) : script == 1 ? (s == 0 || s == 6) : false;
 		if (lines) {
 			double now = System.nanoTime() / 1_000_000_000.0;
 			int n = 26;
@@ -486,27 +588,8 @@ public final class CutsceneCam {
 				ctx.fill(x, y, x + len, y + 1 + (i % 3 == 0 ? 1 : 0), (al << 24) | 0xFFFFFF);
 			}
 		}
-		if (script == 2 && t < 4.7f) {
-			// night sky with stars and one glowing star that swells until the flash at 4.5 s
-			float dark = t < 4.5f ? 0.8f : 0.8f * Math.max(0f, 1f - (t - 4.5f) / 0.2f);
-			ctx.fill(0, 0, w, h, Fx.argb(0x02030A, dark));
-			for (int i = 0; i < 90; i++) {
-				float sx = Fx.rnd(7001, i) * w;
-				float sy = Fx.rnd(7002, i) * h * 0.85f;
-				float tw = 0.4f + 0.6f * (float) Math.abs(Math.sin(t * (1.5 + Fx.rnd(7003, i) * 3) + i));
-				int sz = Fx.rnd(7004, i) > 0.9f ? 2 : 1;
-				ctx.fill((int) sx, (int) sy, (int) sx + sz, (int) sy + sz, Fx.argb(0xFFFFFF, tw * dark));
-			}
-			float grow = Math.min(1f, t / 4.5f);
-			int cx = w / 2;
-			int cy = (int) (h * 0.32f);
-			for (int i = 7; i >= 1; i--) {
-				float rad = (6 + 70 * grow * grow) * i / 7f;
-				ctx.fill((int) (cx - rad), (int) (cy - 1 - rad * 0.04f), (int) (cx + rad), (int) (cy + 1 + rad * 0.04f), Fx.argb(0xFFFFFF, 0.10f * dark));
-				ctx.fill((int) (cx - 1 - rad * 0.04f), (int) (cy - rad), (int) (cx + 1 + rad * 0.04f), (int) (cy + rad), Fx.argb(0xFFFFFF, 0.10f * dark));
-			}
-			int core = (int) (3 + 9 * grow);
-			ctx.fill(cx - core, cy - core, cx + core, cy + core, Fx.argb(0xFFF4C0, 0.9f * dark));
+		if (script == 2 && t < 3.25f) {
+			starSky(ctx, w, h, t);
 		}
 		if (close) {
 			Fx.vignettePublic(ctx, w, h, 0x000000, 0.55f);

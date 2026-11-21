@@ -53,5 +53,30 @@
     "sounds": [
       "orvwindow:crack"
     ]
+  },
+  "jstar": {
+    "sounds": [
+      "orvwindow:jstar"
+    ]
+  },
+  "jslash": {
+    "sounds": [
+      "orvwindow:jslash"
+    ]
+  },
+  "jheavy": {
+    "sounds": [
+      "orvwindow:jheavy"
+    ]
+  },
+  "jflare": {
+    "sounds": [
+      "orvwindow:jflare"
+    ]
+  },
+  "jfinal": {
+    "sounds": [
+      "orvwindow:jfinal"
+    ]
   }
 }
