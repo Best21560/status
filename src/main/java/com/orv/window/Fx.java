@@ -43,6 +43,17 @@ public final class Fx {
 		final List<Vec3d> trail = new ArrayList<>();
 	}
 
+	/** A patch of fire (see FireFx) that belongs to an effect: tt = progress of the effect 0..1. */
+	static final class FireSpot {
+		Vec3d pos;
+		float tt;
+		long seed;
+		int count;
+		double radius;
+		double height;
+		float alpha;
+	}
+
 	private static final List<Effect> LIST = new ArrayList<>();
 	private static final Random RAND = new Random();
 
@@ -610,7 +621,6 @@ public final class Fx {
 		if (auraK > 0f) {
 			darkAura(dark, mc, td, auraK);
 		}
-		PoseClient.drawBlades(dark, null, mc, td);
 		dark.flush();
 
 		// pass 2: glowing light, additive
@@ -648,8 +658,35 @@ public final class Fx {
 			drawAura(pen, mc, td, auraK);
 		}
 		LightClient.render(pen, mc, td);
-		PoseClient.drawBlades(null, pen, mc, td);
 		pen.flush();
+
+		// realistic fire sprites (Berserk aura, burst and slam fires)
+		List<FireSpot> spots = new ArrayList<>();
+		for (Effect e : LIST) {
+			float age = (now - e.start) / 1_000_000_000f;
+			if (age >= e.life) {
+				continue;
+			}
+			FireSpot fs = new FireSpot();
+			fs.pos = e.pos;
+			fs.tt = age / e.life;
+			fs.seed = e.seed;
+			if (e.type == FxNet.BERSERK_START) {
+				fs.count = 44;
+				fs.radius = 4.2;
+				fs.height = 4.6;
+				fs.alpha = 0.95f;
+			} else if (e.type == FxNet.SHOCK) {
+				fs.count = 26;
+				fs.radius = 3.2;
+				fs.height = 2.4;
+				fs.alpha = 0.85f;
+			} else {
+				continue;
+			}
+			spots.add(fs);
+		}
+		FireFx.render(mc, m, cam, td, auraK, spots);
 
 		RenderSystem.defaultBlendFunc();
 		RenderSystem.enableCull();
@@ -725,31 +762,6 @@ public final class Fx {
 		if (g.head - g.tail < 0.015) {
 			return;
 		}
-		boolean counter = e.b == 3;
-		inkStrip(dark, g, g.radius, g.tail, g.head, 1.15 * g.scale, 0x040003, 0.95f, 36);
-		inkStrip(dark, g, g.radius, g.tail, g.head, 0.62 * g.scale, counter ? 0xC8B070 : 0xC8101A, 0.97f, 36);
-		inkStrip(dark, g, g.radius, g.tail, g.head, 0.3 * g.scale, counter ? 0xFFF0C8 : 0xFF5A40, 0.98f, 36);
-		inkStrip(dark, g, g.radius, g.tail, g.head, 0.09 * g.scale, 0xFFFFFF, 1f, 36);
-		// ink flames licking up from the cut
-		float grow = clamp01(tt * 3.5f) * (1f - clamp01((tt - 0.5f) / 0.5f));
-		if (grow > 0.02f) {
-			double t = tt * e.life;
-			for (int i = 0; i < 7; i++) {
-				double u = g.tail + (g.head - g.tail) * (0.15 + 0.8 * rnd(e.seed, i + 400));
-				Vec3d c = arcPoints(g.origin, g.f, g.p, g.radius, g.sweep, u, 0)[0];
-				Vec3d out = c.subtract(g.origin);
-				out = out.lengthSquared() < 1e-6 ? g.f : out.normalize();
-				double h = (0.7 + 1.0 * rnd(e.seed, i + 420)) * g.scale * grow;
-				Vec3d[] pts = new Vec3d[6];
-				for (int j = 0; j < 6; j++) {
-					double s = j / 5.0;
-					pts[j] = c.add(out.multiply(0.25 * s)).add(0, s * h, 0).add(g.p.multiply(Math.sin(t * 9 + i + s * 3) * 0.08 * s));
-				}
-				dark.face(c);
-				dark.blade(pts, 0.34 * g.scale, 0x5A0510, 0.92f);
-				dark.blade(pts, 0.2 * g.scale, 0xE0161E, 0.95f);
-			}
-		}
 	}
 
 	private static void drawSlash(Pen pen, Effect e, float tt, float age) {
@@ -757,26 +769,24 @@ public final class Fx {
 		int[] pal = g.pal;
 		if (g.head - g.tail >= 0.015) {
 			double w = g.scale;
-			strip(pen, g, g.radius, g.tail, g.head, 1.3 * w, pal[0], 0.16f, 34);
-			strip(pen, g, g.radius, g.tail, g.head, 0.7 * w, mix(pal[0], pal[1], 0.5f), 0.3f, 34);
-			strip(pen, g, g.radius, g.tail, g.head, 0.3 * w, pal[1], 0.4f, 34);
-			strip(pen, g, g.radius, g.tail, g.head, 0.07 * w, pal[2], 1.0f, 34);
+			strip(pen, g, g.radius, g.tail, g.head, 0.55 * w, pal[0], 0.10f, 34);
+			strip(pen, g, g.radius, g.tail, g.head, 0.2 * w, pal[1], 0.32f, 34);
+			strip(pen, g, g.radius, g.tail, g.head, 0.045 * w, pal[2], 1.0f, 34);
 			// thin echoes that lag behind the blade
 			double h2 = easeOut((tt - 0.035) / 0.40);
 			double t2 = Math.pow(Math.max(0, (tt - 0.12) / 0.88), 1.25);
 			if (h2 - t2 > 0.02) {
-				strip(pen, g, g.radius - 0.38 * w, t2, h2, 0.05, pal[1], 0.55f, 24);
-				strip(pen, g, g.radius + 0.34 * w, t2, h2, 0.04, pal[0], 0.5f, 24);
+				strip(pen, g, g.radius - 0.3 * w, t2, h2, 0.025, pal[1], 0.35f, 24);
 			}
 			// bright head
 			Vec3d tip = arcPoints(g.origin, g.f, g.p, g.radius, g.sweep, g.head, 0)[0];
-			pen.glow(tip, 0.62 * w, pal[1], 0.9f * g.fade * (float) (1 - tt));
-			pen.glow(tip, 0.22 * w, pal[2], 1f * g.fade);
+			pen.glow(tip, 0.4 * w, pal[1], 0.55f * g.fade * (float) (1 - tt));
+			pen.glow(tip, 0.13 * w, pal[2], 1f * g.fade);
 			// sparks thrown off the head
 			long seed = e.seed;
 			Vec3d tang = tip.subtract(arcPoints(g.origin, g.f, g.p, g.radius, g.sweep, Math.max(0, g.head - 0.05), 0)[0]);
 			tang = tang.lengthSquared() < 1e-8 ? g.f : tang.normalize();
-			for (int i = 0; i < 11; i++) {
+			for (int i = 0; i < 16; i++) {
 				float k = rnd(seed, i);
 				float life = 0.25f + 0.2f * rnd(seed, i + 20);
 				float t2s = (tt * e.life - 0.35f * k) / life;
@@ -786,7 +796,7 @@ public final class Fx {
 				Vec3d v = tang.multiply(1.5 + 2.8 * rnd(seed, i + 40)).add(rndDir(seed, i + 60).multiply(1.7));
 				Vec3d sp = tip.add(v.multiply(t2s * life)).add(0, -2.2 * t2s * life * t2s * life, 0);
 				Vec3d sp2 = sp.subtract(v.multiply(0.05));
-				pen.streak(sp2, sp, 0.032, argb(pal[2], 0f), argb(mix(pal[2], pal[0], t2s), (1 - t2s) * g.fade));
+				pen.streak(sp2, sp, 0.02, argb(pal[2], 0f), argb(mix(pal[2], pal[0], t2s), (1 - t2s) * g.fade));
 			}
 		}
 		// the cut: a straight white line appears across the target right after the arc passes
@@ -838,39 +848,11 @@ public final class Fx {
 		if (tt < 0.04f) {
 			return;
 		}
-		// hard black-and-red spikes thrown out of the hit, then ink flames rising from it
-		dark.face(e.pos);
-		if (tt < 0.45f) {
-			float k = tt / 0.45f;
-			double grow = easeOut(Math.min(1.0, k * 2.2));
-			int spikes = 9 + Math.round(size * 2f);
-			for (int i = 0; i < spikes; i++) {
-				double ang = i * Math.PI * 2 / spikes + rnd(e.seed, i + 500) * 0.4;
-				double len = (0.7 + 1.3 * rnd(e.seed, i + 520)) * size * grow;
-				Vec3d d = dark.camRight.multiply(Math.cos(ang)).add(dark.camUp.multiply(Math.sin(ang)));
-				Vec3d[] pts = new Vec3d[4];
-				for (int j = 0; j < 4; j++) {
-					pts[j] = e.pos.add(d.multiply(len * j / 3.0));
-				}
-				float a = 1f - k * k;
-				dark.blade(pts, 0.34 * size, 0x050003, 0.95f * a);
-				dark.blade(pts, 0.17 * size, 0xD0121C, 0.95f * a);
-			}
-		}
-		double fl = clamp01((tt - 0.05f) / 0.3f) * (1f - clamp01((tt - 0.55f) / 0.45f));
-		if (fl > 0.02) {
-			double t = tt * 0.5;
-			for (int i = 0; i < 3; i++) {
-				double ang = rnd(e.seed, i + 540) * Math.PI * 2;
-				Vec3d root = e.pos.add(Math.cos(ang) * 0.25 * size, -0.1, Math.sin(ang) * 0.25 * size);
-				double h = (0.8 + 0.8 * rnd(e.seed, i + 560)) * size * fl;
-				inkFlame(dark, flamePts(root, ang, h, 0.3, t * 20, i * 2.0, 6), 0.4 * size, (float) fl);
-			}
-		}
-		for (int i = 0; i < 4; i++) {
-			Vec3d d = rndDir(e.seed, i + 100).multiply(0.5 * size * tt);
-			Vec3d c = e.pos.add(d).add(0, 0.5 * tt * size, 0);
-			dark.glow(c, (0.3 + 0.55 * tt) * size, 0x1A050A, 0.5f * (float) Math.pow(1 - tt, 1.3));
+		// dust and smoke puffs thrown out of the hit
+		for (int i = 0; i < 7; i++) {
+			Vec3d d = rndDir(e.seed, i + 100).multiply(0.7 * size * easeOut(tt));
+			Vec3d c = e.pos.add(d).add(0, 0.45 * tt * size, 0);
+			dark.glow(c, (0.25 + 0.5 * tt) * size, 0x3A3430, 0.32f * (float) Math.pow(1 - tt, 1.4));
 		}
 	}
 
@@ -878,29 +860,11 @@ public final class Fx {
 		int[] pal = PALETTE[pb(e.b)];
 		float size = Math.max(0.6f, e.a);
 		float fl = 1f - clamp01(tt / 0.3f);
-		pen.glow(e.pos, 1.1 * size, pal[0], 0.75f * fl);
-		pen.glow(e.pos, 0.55 * size, pal[1], 0.95f * fl);
-		pen.glow(e.pos, 0.22 * size, pal[2], fl);
-		pen.face(e.pos);
-		if (tt < 0.45f) {
-			float k = tt / 0.45f;
-			double grow = easeOut(k * 1.6);
-			int spikes = 8 + Math.round(size * 2f);
-			for (int i = 0; i < spikes; i++) {
-				double ang = i * Math.PI * 2 / spikes + rnd(e.seed, i) * 0.5;
-				double len = (0.5 + 1.1 * rnd(e.seed, i + 10)) * size * grow * (1 - k * 0.6);
-				Vec3d d = pen.camRight.multiply(Math.cos(ang)).add(pen.camUp.multiply(Math.sin(ang)));
-				pen.streak(e.pos.add(d.multiply(0.12 * size)), e.pos.add(d.multiply(0.12 * size + len)), 0.075 * size * (1 - k),
-						argb(pal[2], 0.95f * (1 - k)), argb(pal[1], 0f));
-			}
-		}
-		if (tt < 0.5f) {
-			float k = tt / 0.5f;
-			pen.ringIn(e.pos, pen.camRight, pen.camUp, 0.25 * size + 1.0 * size * easeOut(k), 0.12 * size * (1 - k) + 0.02, pal[1],
-					0.8f * (1 - k));
-		}
+		pen.glow(e.pos, 0.5 * size, pal[0], 0.5f * fl);
+		pen.glow(e.pos, 0.28 * size, pal[1], 0.9f * fl);
+		pen.glow(e.pos, 0.1 * size, pal[2], fl);
 		Vec3d base = e.dir.lengthSquared() < 1e-6 ? new Vec3d(0, 1, 0) : e.dir.normalize();
-		int n = Math.round(14 + size * 6);
+		int n = Math.round(20 + size * 8);
 		for (int i = 0; i < n; i++) {
 			float life = 0.3f + 0.22f * rnd(e.seed, i + 30);
 			float t2 = age / life;
@@ -913,7 +877,7 @@ public final class Fx {
 			double ag = Math.max(0, age - 0.04);
 			Vec3d sp = e.pos.add(v.multiply(age)).add(0, -5.0 * age * age, 0);
 			Vec3d prev = e.pos.add(v.multiply(ag)).add(0, -5.0 * ag * ag, 0);
-			pen.streak(prev, sp, 0.035, argb(pal[1], 0f), argb(mix(pal[2], pal[0], t2), (1 - t2) * 0.95f));
+			pen.streak(prev, sp, 0.022, argb(pal[1], 0f), argb(mix(pal[2], pal[0], t2), (1 - t2) * 0.95f));
 		}
 	}
 
@@ -1133,37 +1097,14 @@ public final class Fx {
 		Vec3d g = e.pos.add(0, 0.04, 0);
 		dark.disc(g, 5.5 * easeOut(Math.min(1.0, tt * 2.5)), 0x100208, 0.6f * (1f - clamp01((tt - 0.5f) / 0.5f)));
 		dark.pillar(g, 10.0, 1.2 * (1 - tt * 0.5), 0x0C0206, 0.55f * (1 - tt));
-		float grow = (float) easeOut(Math.min(1.0, tt * 2.0)) * (1f - clamp01((tt - 0.6f) / 0.4f));
-		if (grow > 0.02f) {
-			double t = tt * e.life;
-			for (int i = 0; i < 20; i++) {
-				double ang = i * Math.PI * 2 / 20 + rnd(e.seed, i + 600) * 0.3;
-				double rad = 1.2 + 3.2 * rnd(e.seed, i + 620);
-				Vec3d root = e.pos.add(Math.cos(ang) * rad, 0.05, Math.sin(ang) * rad);
-				double h = (2.2 + 3.0 * rnd(e.seed, i + 640)) * grow;
-				dark.face(root.add(0, h * 0.5, 0));
-				inkFlame(dark, flamePts(root, ang, h, 0.8, t * 2.0, i * 1.3, 9), 0.7, 1f);
-			}
-		}
 	}
 
 	private static void drawBerserkBurst(Pen pen, Effect e, float tt) {
 		float fade = (float) Math.pow(1 - tt, 1.2);
 		double r = 10.0 * easeOut(tt);
 		Vec3d g = e.pos.add(0, 0.05, 0);
-		pen.ring(g, r, 0.5 * (1 - tt) + 0.1, 0xFF5030, 0.9f * fade);
-		pen.ring(g, r * 0.6, 0.9 * (1 - tt) + 0.1, 0xC01810, 0.6f * fade);
-		pen.ring(g, r * 0.3, 0.6 * (1 - tt) + 0.1, 0xFF9050, 0.5f * fade);
-		double grow = easeOut(Math.min(1.0, tt * 1.8));
-		for (int i = 0; i < 18; i++) {
-			double ang = i * Math.PI * 2 / 18 + rnd(e.seed, i) * 0.3;
-			Vec3d dir = new Vec3d(Math.cos(ang), 0, Math.sin(ang));
-			Vec3d side = new Vec3d(-dir.z, 0, dir.x);
-			double len = (2.0 + 3.5 * rnd(e.seed, i + 20)) * grow;
-			pen.petal(g.add(dir.multiply(0.8)), dir, side, len, 0.9, mix(0xFF4020, 0xFFA040, rnd(e.seed, i + 40)), 0.8f * fade);
-		}
-		pen.pillar(g, 12.0, 0.9 * (1 - tt * 0.6), 0xFF3010, 0.8f * fade);
-		pen.pillar(g, 7.0, 0.35 * (1 - tt * 0.6), 0xFFC070, 0.7f * fade);
+		pen.ring(g, r, 0.25 * (1 - tt) + 0.05, 0xE02018, 0.45f * fade);
+		pen.pillar(g, 9.0, 0.7 * (1 - tt * 0.6), 0xC01010, 0.28f * fade);
 		pen.glow(e.pos.add(0, 1.0, 0), 3.2 * easeOut(tt * 1.5), 0xFF4020, 0.7f * fade);
 		float age = tt * e.life;
 		for (int i = 0; i < 34; i++) {
@@ -1269,36 +1210,15 @@ public final class Fx {
 		for (int i = 0; i < 7; i++) {
 			double ang = i * 0.9 + t * 0.25;
 			Vec3d p = base.add(Math.cos(ang) * 1.3, 0.6 + 0.35 * i % 2 + 0.5 * Math.sin(t * 1.5 + i), Math.sin(ang) * 1.3);
-			dark.glow(p, 1.0 + 0.25 * Math.sin(t * 2 + i * 2), 0x7A000C, 0.2f * k * vis);
+			dark.glow(p, 1.0 + 0.25 * Math.sin(t * 2 + i * 2), 0x4A0E04, 0.16f * k * vis);
 		}
-		// black smoke rising
-		int wisps = k > 0.5f ? 12 : 4;
-		for (int i = 0; i < wisps; i++) {
+		// dark smoke rising off the fire
+		for (int i = 0; i < 6; i++) {
 			float s1 = rnd(11, i);
-			float s2 = rnd(12, i);
-			double phase = (t * (0.22 + 0.25 * s2) + s1) % 1.0;
-			Vec3d[] pts = new Vec3d[6];
-			for (int j = 0; j < 6; j++) {
-				double ph = Math.max(0, phase - 0.28 + j * 0.056);
-				double ang = s1 * Math.PI * 2 + t * 0.8 + ph * 2.6;
-				double rad = 0.7 + 0.55 * ph;
-				pts[j] = base.add(Math.cos(ang) * rad, 0.2 + ph * 3.2, Math.sin(ang) * rad);
-			}
-			float a = (float) Math.sin(Math.PI * phase) * 0.6f * k * vis;
-			dark.ribbon(pts, 0.3, 1.1, 0x050005, a * 0.3f, a);
-		}
-		// the flames
-		int tongues = k > 0.5f ? 18 : 6;
-		for (int i = 0; i < tongues; i++) {
-			float s2 = rnd(22, i);
-			float s3 = rnd(23, i);
-			double ang = i * Math.PI * 2 / tongues + t * 0.3 + rnd(21, i) * 0.4;
-			double rad = 0.5 + 0.45 * s2;
-			double flick = 0.8 + 0.2 * Math.sin(t * (4.0 + 4.0 * s3) + i);
-			double height = (1.7 + 1.7 * s3) * flick * (0.4 + 0.6 * k);
-			Vec3d root = base.add(Math.cos(ang) * rad, 0.05, Math.sin(ang) * rad);
-			dark.face(root.add(0, height * 0.5, 0));
-			inkFlame(dark, flamePts(root, ang, height, 0.5 + 0.5 * s2, t, i * 1.7, 9), 0.5 + 0.3 * s2, k * vis);
+			double phase = (t * (0.18 + 0.12 * rnd(12, i)) + s1) % 1.0;
+			double ang = s1 * Math.PI * 2 + t * 0.5;
+			Vec3d p = base.add(Math.cos(ang) * 0.5 * (1 + phase), 1.6 + phase * 2.6, Math.sin(ang) * 0.5 * (1 + phase));
+			dark.glow(p, 0.5 + 0.7 * phase, 0x0C0908, (float) Math.sin(Math.PI * phase) * 0.35f * k * vis);
 		}
 	}
 
@@ -1323,7 +1243,8 @@ public final class Fx {
 			}
 		}
 		// heat on the edge of the shadow and rising embers
-		pen.glow(base.add(0, 1.0, 0), 1.5, 0xB00810, 0.1f * k * vis);
+		pen.glow(base.add(0, 1.0, 0), 1.6, 0xD01410, 0.14f * k * vis);
+		pen.glow(base.add(0, 0.2, 0), 1.8, 0xA00C0C, 0.12f * k * vis);
 		int embers = k > 0.5f ? 22 : 6;
 		for (int i = 0; i < embers; i++) {
 			float s1 = rnd(31, i);
@@ -1334,7 +1255,7 @@ public final class Fx {
 			double rad = 0.5 + 0.8 * s3;
 			Vec3d p = base.add(Math.cos(ang) * rad, 0.1 + phase * 3.4, Math.sin(ang) * rad);
 			float a = (float) Math.sin(Math.PI * phase) * k * vis;
-			int col = mix(0xFF4A38, 0x900810, (float) phase);
+			int col = mix(0xFF4838, 0x500408, (float) phase);
 			pen.glow(p, 0.045 + 0.04 * (1 - phase), col, 0.95f * a);
 			if (i % 3 == 0) {
 				pen.streak(p, p.add(0, 0.5 + 0.3 * s2, 0), 0.02, argb(col, 0.8f * a), argb(col, 0f));
