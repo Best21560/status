@@ -110,7 +110,7 @@ public final class Fx {
 			berserkTicks--;
 		}
 		// safety: the server says the cutscene lock is over but the end packet got lost
-		if (cutscene && !locked && System.currentTimeMillis() - cutsceneAt > 7000) {
+		if (cutscene && !locked && System.currentTimeMillis() - cutsceneAt > 32000) {
 			endCutscene(mc);
 		}
 	}
@@ -307,13 +307,15 @@ public final class Fx {
 		if (!cutscene) {
 			savedView = mc.options.getPerspective();
 		}
-		org.slf4j.LoggerFactory.getLogger("orvwindow").info("[orvwindow] cut-scene start packet received (front={})", front);
+		org.slf4j.LoggerFactory.getLogger("orvwindow").info("[orvwindow] cut-scene start packet received (kind={}, target={})", kind, targetId);
 		cutscene = true;
 		cutsceneAt = System.currentTimeMillis();
 		if (front) {
 			introAt = System.nanoTime();
 		} else if (kind == 2) {
 			CutsceneCam.start(1, targetId);
+		} else if (kind == 3) {
+			CutsceneCam.start(2, targetId);
 		}
 		mc.options.setPerspective(front ? Perspective.THIRD_PERSON_FRONT : Perspective.THIRD_PERSON_BACK);
 	}

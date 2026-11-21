@@ -86,6 +86,10 @@ public final class CutsceneCam {
 			return;
 		}
 		int s = shot(t);
+		if (!logged) {
+			logged = true;
+			org.slf4j.LoggerFactory.getLogger("orvwindow").info("[orvwindow] cut-scene camera running: script {} shot {} (camera mixin applied: {})", script, s, cam instanceof CameraAccess);
+		}
 		float[] cuts = CUT_TABLE[script];
 		float s0 = cuts[s];
 		float s1 = s + 1 < cuts.length ? cuts[s + 1] : TOTALS[script];

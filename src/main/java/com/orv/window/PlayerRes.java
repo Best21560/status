@@ -217,6 +217,8 @@ public class PlayerRes {
 	public Vec3d jBase = null;
 	public double jTop = 5.0;
 	public float jEach = 0f;
+	/** Final Judgment: the total damage the whole cut-scene deals. */
+	public float jTotal = 0f;
 	public float jFinal = 0f;
 	public boolean jAiWas = false;
 	public long jLandAt = -1;
