@@ -135,7 +135,7 @@ public final class Fx {
 		}
 		switch (type) {
 			case FxNet.CUTSCENE_START -> {
-				startCutscene(mc, b == 1);
+				startCutscene(mc, b, Math.round(a));
 				return;
 			}
 			case FxNet.ANIM -> {
@@ -169,7 +169,7 @@ public final class Fx {
 			case FxNet.GRAB -> 0.7f;
 			case FxNet.PARRY -> 0.4f;
 			case FxNet.BERSERK_START -> 1.7f;
-				case FxNet.CHARGE -> 2.4f;
+				case FxNet.CHARGE -> 1.3f;
 				case FxNet.LEAP -> a + 0.6f;
 			case FxNet.LB_CIRCLE -> 1.4f;
 			case FxNet.PROJ -> Math.max(0.2f, a) + 0.1f;
@@ -276,15 +276,18 @@ public final class Fx {
 	}
 
 	/** front = the Berserk cut-scene: the camera looks at the Slayer's face. */
-	private static void startCutscene(MinecraftClient mc, boolean front) {
+	private static void startCutscene(MinecraftClient mc, int kind, int targetId) {
+		boolean front = kind == 1;
 		if (!cutscene) {
 			savedView = mc.options.getPerspective();
 		}
+		org.slf4j.LoggerFactory.getLogger("orvwindow").info("[orvwindow] cut-scene start packet received (front={})", front);
 		cutscene = true;
 		cutsceneAt = System.currentTimeMillis();
 		if (front) {
 			introAt = System.nanoTime();
-			CutsceneCam.start();
+		} else if (kind == 2) {
+			CutsceneCam.start(1, targetId);
 		}
 		mc.options.setPerspective(front ? Perspective.THIRD_PERSON_FRONT : Perspective.THIRD_PERSON_BACK);
 	}
@@ -571,8 +574,8 @@ public final class Fx {
 		}
 		if (introAt > 0) {
 			float t = (System.nanoTime() - introAt) / 1_000_000_000f;
-			if (t < 5.6f) {
-				return clamp01((t - 2.2f) / 1.0f);
+			if (t < 3.6f) {
+				return clamp01((t - 1.0f) / 0.9f);
 			}
 		}
 		if (OrvWindowClient.slayer && OrvWindowClient.rage >= 70f) {
@@ -1296,8 +1299,8 @@ public final class Fx {
 		// Berserk cut-scene: the screen darkens and reddens while the Slayer roars
 		if (introAt > 0 && berserkTicks <= 0) {
 			float it = (System.nanoTime() - introAt) / 1_000_000_000f;
-			if (it < 5.2f) {
-				float k = clamp01((it - 0.3f) / 1.0f) * (1f - clamp01((it - 4.6f) / 0.6f));
+			if (it < 3.2f) {
+				float k = clamp01((it - 0.2f) / 1.0f) * (1f - clamp01((it - 2.7f) / 0.5f));
 				vignette(ctx, w, h, 0x000000, 0.5f * k);
 				vignette(ctx, w, h, 0xC00800, 0.35f * k * (0.8f + 0.2f * (float) Math.sin(t * 14.0)));
 			}

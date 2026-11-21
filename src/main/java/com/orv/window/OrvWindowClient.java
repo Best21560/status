@@ -60,6 +60,7 @@ public class OrvWindowClient implements ClientModInitializer {
 	public static KeyBinding pursuitKey;
 	public static KeyBinding fatalKey;
 	public static KeyBinding judgmentKey;
+	public static KeyBinding berserkKey;
 
 	public static KeyBinding bloodKey;
 	public static KeyBinding shieldKey;
@@ -96,6 +97,9 @@ public class OrvWindowClient implements ClientModInitializer {
 		judgmentKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
 				"key.orvwindow.judgment", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_B, "category.orvwindow"));
 
+		berserkKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+				"key.orvwindow.berserk", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_G, "category.orvwindow"));
+
 		ClientTickEvents.START_CLIENT_TICK.register(BerserkClient::suppress);
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
@@ -117,6 +121,9 @@ public class OrvWindowClient implements ClientModInitializer {
 				}
 				while (judgmentKey.wasPressed()) {
 					sendAction(13);
+				}
+				while (berserkKey.wasPressed()) {
+					sendAction(14);
 				}
 			} else if (myClass.equals("lightbender") && !noControl && client.player != null && client.currentScreen == null) {
 				while (slashKey.wasPressed()) {

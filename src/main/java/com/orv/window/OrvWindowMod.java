@@ -155,6 +155,23 @@ public class OrvWindowMod implements ModInitializer {
 								.then(CommandManager.argument("players", EntityArgumentType.players())
 										.executes(ctx -> changeClass(ctx, ""))))));
 
+		// /orvberserk [players]: starts the Berserk cut-scene (to test it)   (ops only)
+		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
+				dispatcher.register(CommandManager.literal("orvberserk")
+						.requires(src -> src.hasPermissionLevel(2))
+						.executes(ctx -> {
+							SlayerEngine.forceBerserk(ctx.getSource().getPlayerOrThrow());
+							return 1;
+						})
+						.then(CommandManager.argument("players", EntityArgumentType.players())
+								.executes(ctx -> {
+									Collection<ServerPlayerEntity> t = EntityArgumentType.getPlayers(ctx, "players");
+									for (ServerPlayerEntity p : t) {
+										SlayerEngine.forceBerserk(p);
+									}
+									return t.size();
+								}))));
+
 		// /orvlevel set <players> <level>   /orvlevel addxp <players> <amount>   (ops only)
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
 				dispatcher.register(CommandManager.literal("orvlevel")

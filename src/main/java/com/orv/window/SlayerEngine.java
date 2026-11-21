@@ -45,7 +45,7 @@ public final class SlayerEngine {
 
 	private static final int CUTSCENE_MAX = 100;
 	/** The Berserk cut-scene (3 seconds): charge, chest beating, roar, ground slam. */
-	private static final int INTRO_TICKS = 104;
+	private static final int INTRO_TICKS = 60;
 	private static final double LEAP_VY = 0.8;
 
 	public static boolean is(PlayerRes r) {
@@ -58,7 +58,7 @@ public final class SlayerEngine {
 
 	/** True while the player has no control: Final Judgment, the Berserk cut-scene and the Fatal Strike leap. */
 	public static boolean locked(PlayerRes r) {
-		return r.jTarget != null || r.bIntroStart > 0 || r.fAir;
+		return r.jTarget != null || r.bIntroStart > 0 || r.fAir || r.pLock;
 	}
 
 	private static void anim(ServerPlayerEntity p, int id) {
@@ -74,12 +74,23 @@ public final class SlayerEngine {
 		// Rage is slow to build: every gain event is worth exactly 1 point
 		r.rage = Math.min(MAX_RAGE, r.rage + 1f);
 		r.lastRageGain = now;
-		if (r.rage >= MAX_RAGE) {
-			startBerserk(p, r, now);
+		if (r.rage >= MAX_RAGE && r.lastRageGain == now && !r.rageFullShown) {
+			r.rageFullShown = true;
+			p.sendMessage(Text.translatable("orvwindow.msg.rage_full"), true);
 		}
 	}
 
+	/** Test / op command: start the Berserk cut-scene right now. */
+	public static void forceBerserk(ServerPlayerEntity p) {
+		PlayerRes r = PassiveEngine.res(p.getUuid());
+		if (r.bIntroStart > 0 || berserk(r, PassiveEngine.nowOf(p))) {
+			return;
+		}
+		startBerserk(p, r, PassiveEngine.nowOf(p));
+	}
+
 	private static void startBerserk(ServerPlayerEntity p, PlayerRes r, long now) {
+		org.slf4j.LoggerFactory.getLogger("orvwindow").info("[orvwindow] Berserk cut-scene starts for {}", p.getName().getString());
 		// first a cut-scene (charge, chest beating, roar); the 20 seconds of Berserk start when it ends
 		r.rage = MAX_RAGE;
 		r.bIntroStart = now;
@@ -96,10 +107,10 @@ public final class SlayerEngine {
 		long t = now - r.bIntroStart;
 		ServerWorld w = p.getServerWorld();
 		p.fallDistance = 0f;
-		if (t >= 10 && t < 38 && t % 6 == 4) {
-			p.swingHand(t % 12 == 4 ? Hand.MAIN_HAND : Hand.OFF_HAND, true);
+		if (t >= 6 && t < 22 && t % 5 == 1) {
+			p.swingHand(t % 10 == 1 ? Hand.MAIN_HAND : Hand.OFF_HAND, true);
 		}
-		if (t == 53) {
+		if (t == 24) {
 			// the roar: everybody around is thrown back, the body jumps
 			Vec3d c = p.getPos();
 			FxNet.send(w, FxNet.BERSERK_START, c, Vec3d.ZERO, 0f, 0);
@@ -110,7 +121,7 @@ public final class SlayerEngine {
 			}
 			p.setVelocity(0, 0.36, 0);
 			p.velocityModified = true;
-		} else if (t == 88) {
+		} else if (t == 50) {
 			EpicLink.play(p, "GREATSWORD_AIR_SLASH");
 			FxNet.send(w, FxNet.SHOCK, p.getPos().add(0, 0.05, 0), Vec3d.ZERO, 9f, 2);
 			FxNet.sendTo(p, FxNet.FLASH, p.getPos(), Vec3d.ZERO, 0.6f, 1);
@@ -127,6 +138,7 @@ public final class SlayerEngine {
 	private static void endBerserk(ServerPlayerEntity p, PlayerRes r, long now) {
 		r.berserkUntil = 0;
 		r.rage = 0f;
+		r.rageFullShown = false;
 		r.rageLockUntil = now + 100;
 		// the price of the rage: 8 seconds of exhaustion
 		p.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 160, 0));
@@ -194,6 +206,14 @@ public final class SlayerEngine {
 			case 11 -> pursuit(p, r, now);
 			case 12 -> fatal(p, r, now);
 			case 13 -> judgment(p, r, now);
+			case 14 -> {
+				// Berserk is started by its own key, and only with full Rage
+				if (r.rage >= MAX_RAGE && now >= r.rageLockUntil) {
+					startBerserk(p, r, now);
+				} else {
+					p.sendMessage(Text.translatable("orvwindow.msg.rage_not_full"), true);
+				}
+			}
 			default -> {
 			}
 		}
@@ -314,6 +334,11 @@ public final class SlayerEngine {
 
 	// ------------------------------------------------------------------ 2. Relentless Pursuit
 
+	/** Relentless Pursuit is a short cut-scene: face close-up, dash, four fast cuts, a charged final slash, hero pose. */
+	private static final int[] P_HIT = {17, 22, 27, 32, 46};
+	private static final int P_DASH = 10;
+	private static final int P_END = 76;
+
 	private static void pursuit(ServerPlayerEntity p, PlayerRes r, long now) {
 		if (!ready(p, r, PURSUIT, now)) {
 			return;
@@ -329,19 +354,42 @@ public final class SlayerEngine {
 		r.cdEnd[PURSUIT] = now + CD[PURSUIT];
 		r.pTarget = t.getUuid();
 		r.pHits = 5;
-		r.pNext = now + 3;
-		r.iframeUntil = Math.max(r.iframeUntil, now + 30);
-		dashTo(p, t);
+		r.pStart = now;
+		r.pLock = true;
+		r.iframeUntil = Math.max(r.iframeUntil, now + P_END + 10);
+		p.setVelocity(Vec3d.ZERO);
+		p.velocityModified = true;
+		faceTo(p, t);
+		FxNet.sendTo(p, FxNet.CUTSCENE_START, p.getPos(), Vec3d.ZERO, (float) t.getId(), 2);
+		FxNet.send(p.getServerWorld(), FxNet.CHARGE, p.getPos(), Vec3d.ZERO, 0f, 0);
 	}
 
 	private static void tickPursuit(ServerPlayerEntity p, PlayerRes r, long now) {
-		if (r.pTarget == null || now < r.pNext) {
+		if (!r.pLock) {
 			return;
 		}
+		long k = now - r.pStart;
 		ServerWorld w = p.getServerWorld();
-		Entity e = w.getEntity(r.pTarget);
-		if (!(e instanceof LivingEntity t) || !t.isAlive() || r.pHits <= 0) {
+		if (k >= P_END) {
+			r.pLock = false;
 			r.pTarget = null;
+			r.pHits = 0;
+			FxNet.sendTo(p, FxNet.CUTSCENE_END, p.getPos(), Vec3d.ZERO, 0f, 0);
+			return;
+		}
+		p.fallDistance = 0f;
+		if (k < P_HIT[4] + 6) {
+			p.setVelocity(Vec3d.ZERO);
+			p.velocityModified = true;
+		}
+		Entity e = r.pTarget == null ? null : w.getEntity(r.pTarget);
+		if (!(e instanceof LivingEntity t) || !t.isAlive()) {
+			return;
+		}
+		if (k == P_DASH) {
+			dashTo(p, t);
+		}
+		if (r.pHits <= 0 || k < P_HIT[5 - r.pHits]) {
 			return;
 		}
 		if (t.distanceTo(p) > 2.6f) {
@@ -355,16 +403,14 @@ public final class SlayerEngine {
 		EpicLink.play(p, n % 2 == 0 ? "GREATSWORD_AUTO1" : "GREATSWORD_AUTO2");
 		anim(p, last ? PoseClient.SLASH_R : (n % 2 == 0 ? PoseClient.FAST_R : PoseClient.FAST_L));
 		FxNet.send(w, FxNet.SLASH, p.getEyePos().add(0, -0.2, 0), dir, (n % 2 == 0 ? 40f : -40f) + n * 7f, last ? 2 : 0);
-		strike(p, t, base(p) * (last ? 1.1f : 0.75f));
+		strike(p, t, base(p) * (last ? 1.4f : 0.7f));
 		if (last) {
-			t.takeKnockback(1.0, -dir.x, -dir.z);
+			t.takeKnockback(1.6, -dir.x, -dir.z);
+			FxNet.send(w, FxNet.SHOCK, t.getPos().add(0, 0.05, 0), Vec3d.ZERO, 5f, 2);
+			FxNet.sendTo(p, FxNet.FLASH, p.getPos(), Vec3d.ZERO, 0.5f, 0);
 		}
-		FxNet.send(w, FxNet.IMPACT, chest(t), dir, last ? 1.6f : 1f, 0);
+		FxNet.send(w, FxNet.IMPACT, chest(t), dir, last ? 2.0f : 1f, last ? 2 : 0);
 		r.pHits--;
-		r.pNext = now + 4;
-		if (r.pHits <= 0) {
-			r.pTarget = null;
-		}
 	}
 
 	/** Dash next to the target (instant move with a trail effect). */
@@ -757,6 +803,8 @@ public final class SlayerEngine {
 		r.bIntroStart = 0;
 		r.fAir = false;
 		r.slashAt = 0;
+		r.pLock = false;
+		r.pTarget = null;
 		if (r.jTarget != null) {
 			Entity e = p.getServerWorld().getEntity(r.jTarget);
 			if (e instanceof LivingEntity le) {
@@ -780,6 +828,7 @@ public final class SlayerEngine {
 				r.bIntroStart = 0;
 				r.fAir = false;
 				r.pTarget = null;
+				r.pLock = false;
 			}
 			return;
 		}
@@ -801,9 +850,8 @@ public final class SlayerEngine {
 			}
 		} else if (r.berserkUntil > 0) {
 			endBerserk(p, r, now);
-		} else if (r.rage > 0f && now - r.lastRageGain > 160 && now % 10 == 0) {
-			r.rage = Math.max(0f, r.rage - 1f);
 		}
+		// Rage never drains by itself: it only goes away when Berserk is used
 	}
 
 	/** Bits for the client: which skills are on cooldown (used to decide when to send an update). */

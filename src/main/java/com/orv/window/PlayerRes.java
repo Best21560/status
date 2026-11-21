@@ -194,6 +194,11 @@ public class PlayerRes {
 	public UUID pTarget = null;
 	public int pHits = 0;
 	public long pNext = 0;
+	/** Relentless Pursuit cut-scene: start tick, and true while it runs (controls locked). */
+	public long pStart = 0;
+	/** The "Rage is full" message was shown (so it is not repeated). */
+	public boolean rageFullShown = false;
+	public boolean pLock = false;
 	public UUID cTarget = null;
 	public long cAt = 0;
 	// Final Judgment cutscene

@@ -334,5 +334,8 @@
   "orvwindow.stat.tip.4": "Stamina สูงสุด +5 และต้านแรงกระแทก +0.5% ต่อแต้ม",
   "orvwindow.msg.levelup": "เลเวลอัป! เลเวล %s (ได้รับแต้มสเตตัส +3)",
   "orvwindow.cmd.level_set": "ตั้งเลเวลของ %s คนเป็น %s",
-  "orvwindow.cmd.xp_added": "เพิ่ม XP ให้ %s คน (%s)"
+  "orvwindow.cmd.xp_added": "เพิ่ม XP ให้ %s คน (%s)",
+  "key.orvwindow.berserk": "Berserk (Slayer: ใช้เมื่อ Rage เต็ม)",
+  "orvwindow.msg.rage_full": "Rage เต็มแล้ว — กดปุ่ม Berserk เพื่อเข้าโหมด",
+  "orvwindow.msg.rage_not_full": "Rage ยังไม่เต็ม"
 }
