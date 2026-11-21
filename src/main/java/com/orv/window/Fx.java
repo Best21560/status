@@ -40,6 +40,7 @@ public final class Fx {
 		long start;
 		float life;
 		long seed;
+		double maxDist = 34.0;
 		final List<Vec3d> trail = new ArrayList<>();
 	}
 
@@ -171,6 +172,8 @@ public final class Fx {
 			case FxNet.BERSERK_START -> 1.7f;
 				case FxNet.CHARGE -> 1.3f;
 				case FxNet.LEAP -> a + 0.6f;
+				case FxNet.WAVE -> a + 0.7f;
+				case FxNet.WAVE_CHARGE -> 0.9f;
 			case FxNet.LB_CIRCLE -> 1.4f;
 			case FxNet.PROJ -> Math.max(0.2f, a) + 0.1f;
 			case FxNet.HEAL_PULSE -> 1.0f;
@@ -178,6 +181,18 @@ public final class Fx {
 			case FxNet.HALO_BURST -> 0.9f;
 			default -> 0.4f;
 		};
+		if (type == FxNet.WAVE && dir.lengthSquared() > 1e-6) {
+			Vec3d dn = dir.normalize();
+			net.minecraft.util.hit.BlockHitResult wr = mc.world.raycast(new net.minecraft.world.RaycastContext(pos,
+					pos.add(dn.multiply(34.0)), net.minecraft.world.RaycastContext.ShapeType.COLLIDER,
+					net.minecraft.world.RaycastContext.FluidHandling.NONE, mc.player));
+			if (wr.getType() != net.minecraft.util.hit.HitResult.Type.MISS) {
+				e.maxDist = wr.getPos().subtract(pos).length();
+			}
+		}
+		if (type == FxNet.WAVE && mc.player.squaredDistanceTo(pos) < 900.0) {
+			shake(2.2f, 12);
+		}
 		if (LIST.size() > 160) {
 			LIST.remove(0);
 		}
@@ -250,6 +265,17 @@ public final class Fx {
 				s = b == 1 ? OrvSounds.BOOM : OrvSounds.PARRY;
 				vol = 1.0f;
 				pitch = b == 1 ? 1.3f : 1.1f;
+			}
+			case FxNet.WAVE -> {
+				mc.world.playSound(p.x, p.y, p.z, OrvSounds.BOOM, SoundCategory.PLAYERS, 1.4f, 0.7f, false);
+				s = OrvSounds.SLASH;
+				vol = 1.6f;
+				pitch = 0.55f;
+			}
+			case FxNet.WAVE_CHARGE -> {
+				s = OrvSounds.CHARGE;
+				vol = 1.1f;
+				pitch = 1.5f;
 			}
 			case FxNet.BERSERK_START -> {
 				mc.world.playSound(p.x, p.y, p.z, OrvSounds.ROAR, SoundCategory.PLAYERS, 2.4f, 1f, false);
@@ -624,6 +650,7 @@ public final class Fx {
 				case FxNet.BERSERK_START -> darkBurst(dark, e, tt);
 				case FxNet.CHARGE -> darkCharge(dark, e, tt);
 				case FxNet.LEAP -> drawLeap(dark, e, age, true);
+				case FxNet.WAVE -> darkWave(dark, e, age);
 				default -> {
 				}
 			}
@@ -655,6 +682,8 @@ public final class Fx {
 				case FxNet.BERSERK_START -> drawBerserkBurst(pen, e, tt);
 				case FxNet.CHARGE -> drawCharge(pen, e, tt);
 				case FxNet.LEAP -> drawLeap(pen, e, age, false);
+				case FxNet.WAVE -> drawWave(pen, e, age);
+				case FxNet.WAVE_CHARGE -> drawHold(pen, e, tt);
 				case FxNet.LB_CIRCLE -> LightClient.drawCircle(pen, e.pos, e.dir, e.a, e.b, tt);
 				case FxNet.PROJ -> LightClient.drawProj(pen, e.pos, e.dir, age, e.a);
 				case FxNet.HEAL_PULSE -> LightClient.drawPulse(pen, e.pos, e.a, e.b, tt);
@@ -1127,6 +1156,130 @@ public final class Fx {
 			}
 			Vec3d p0 = e.pos.add(Math.cos(ang) * rr, 0.1 + k * (2.5 + 4.0 * rnd(e.seed, i + 190)), Math.sin(ang) * rr);
 			pen.glow(p0, 0.08 * (1 - k) + 0.02, mix(0xFFC060, 0xB01008, k), 0.9f * (1 - k));
+		}
+	}
+
+	// ---- Fatal Strike: energy gathers overhead, then a red wave rushes along the ground
+
+	/** The energy gathering above the hovering Slayer: embers pulled in, a shrinking ring, a growing white-hot core. */
+	private static void drawHold(Pen pen, Effect e, float tt) {
+		Vec3d c = e.pos;
+		float al = 1f - clamp01((tt - 0.9f) / 0.1f);
+		pen.face(c);
+		for (int i = 0; i < 26; i++) {
+			double ang = rnd(e.seed, i) * Math.PI * 2;
+			double el = (rnd(e.seed, i + 30) - 0.5) * 2.2;
+			float s = clamp01((tt * 1.1f - rnd(e.seed, i + 60) * 0.35f) / 0.65f);
+			if (s <= 0f || s >= 1f) {
+				continue;
+			}
+			double rad = 3.4 * (1 - s) + 0.2;
+			Vec3d cur = c.add(Math.cos(ang) * rad * Math.cos(el), Math.sin(el) * rad, Math.sin(ang) * rad * Math.cos(el));
+			double rad2 = 3.4 * (1 - Math.max(0, s - 0.12)) + 0.2;
+			Vec3d prev = c.add(Math.cos(ang) * rad2 * Math.cos(el), Math.sin(el) * rad2, Math.sin(ang) * rad2 * Math.cos(el));
+			float a = (float) Math.sin(Math.PI * s) * al;
+			pen.streak(prev, cur, 0.05, argb(0xFF3020, 0f), argb(mix(0xFF9A70, 0xFF1810, s), 0.9f * a));
+		}
+		double k = tt * tt;
+		pen.glow(c, 0.35 + 1.5 * k, 0xFF1810, (0.25f + 0.5f * tt) * al);
+		pen.glow(c, 0.15 + 0.6 * k, 0xFF7040, (0.3f + 0.6f * tt) * al);
+		pen.glow(c, 0.06 + 0.25 * k, 0xFFFFFF, Math.min(1f, 0.5f + tt) * al);
+		pen.ringIn(c, pen.camRight, pen.camUp, 1.9 * (1 - tt) + 0.2, 0.05 + 0.04 * tt, 0xFF4030, 0.7f * tt * al);
+	}
+
+	private static Vec3d waveHead(Effect e, float age) {
+		Vec3d d = e.dir.lengthSquared() < 1e-6 ? new Vec3d(0, 0, 1) : e.dir.normalize();
+		return e.pos.add(d.multiply(Math.min(e.maxDist, 34.0 * age)));
+	}
+
+	private static float waveFade(Effect e, float age) {
+		float endAt = (float) (e.maxDist / 34.0);
+		return 1f - clamp01((age - endAt) / 0.45f);
+	}
+
+	/** The dark side of the wave: a scorched strip on the ground and dust. */
+	private static void darkWave(Pen dark, Effect e, float age) {
+		Vec3d d = e.dir.lengthSquared() < 1e-6 ? new Vec3d(0, 0, 1) : e.dir.normalize();
+		Vec3d head = waveHead(e, age);
+		float fade = waveFade(e, age);
+		float life = 1f - clamp01((age - 0.3f) / 1.4f);
+		double gy = e.pos.y - 0.88;
+		Vec3d start = new Vec3d(e.pos.x, gy, e.pos.z);
+		Vec3d end = new Vec3d(head.x, gy, head.z);
+		dark.streak(start, end, 2.0, argb(0x0A0204, 0.5f * life), argb(0x0A0204, 0.65f * life));
+		for (int i = 0; i < 10; i++) {
+			double u = rnd(e.seed, i + 700);
+			Vec3d p = start.add(end.subtract(start).multiply(u)).add(0, 0.3 + 0.9 * (age - u * 0.5) * rnd(e.seed, i + 720), 0);
+			if (u * e.maxDist > Math.min(e.maxDist, 34.0 * age)) {
+				continue;
+			}
+			dark.glow(p, 0.5 + 0.5 * rnd(e.seed, i + 740), 0x3A3028, 0.3f * life * fade);
+		}
+	}
+
+	/** The red wave: a bright crescent at the head, a long hot streak behind it, sparks and a glowing ground strip. */
+	private static void drawWave(Pen pen, Effect e, float age) {
+		Vec3d d = e.dir.lengthSquared() < 1e-6 ? new Vec3d(0, 0, 1) : e.dir.normalize();
+		Vec3d right = new Vec3d(-d.z, 0, d.x);
+		Vec3d up = new Vec3d(0, 1, 0);
+		double tilt = Math.toRadians(24);
+		Vec3d axis = right.multiply(Math.cos(tilt)).add(up.multiply(Math.sin(tilt)));
+		Vec3d head = waveHead(e, age);
+		float fade = waveFade(e, age);
+		if (fade <= 0f) {
+			return;
+		}
+		double travelled = head.subtract(e.pos).length();
+		// ground glow along the path
+		Vec3d gs = new Vec3d(e.pos.x, e.pos.y - 0.85, e.pos.z);
+		Vec3d ge = new Vec3d(head.x, head.y - 0.85, head.z);
+		float gl = (1f - clamp01((age - 0.2f) / 1.0f)) * fade;
+		pen.streak(gs, ge, 1.6, argb(0xFF2010, 0.25f * gl), argb(0xFF4020, 0.5f * gl));
+		pen.streak(gs, ge, 0.5, argb(0xFF6A40, 0.4f * gl), argb(0xFFB080, 0.8f * gl));
+		// crescents: the front one and two echoes behind it
+		for (int c = 0; c < 3; c++) {
+			double back = c * 1.1;
+			if (travelled < back) {
+				continue;
+			}
+			Vec3d ctr = head.subtract(d.multiply(back));
+			double R = (2.5 - c * 0.35) * (0.55 + 0.45 * Math.min(1.0, travelled / 6.0));
+			float ca = (1f - c * 0.32f) * fade;
+			int n = 22;
+			for (int layer = 0; layer < 3; layer++) {
+				double wMul = layer == 0 ? 0.75 : (layer == 1 ? 0.32 : 0.09);
+				int col = layer == 0 ? 0xE01410 : (layer == 1 ? 0xFF4A30 : 0xFFF0E0);
+				float la = layer == 0 ? 0.35f : (layer == 1 ? 0.7f : 1f);
+				for (int i = 0; i < n; i++) {
+					double th0 = (-1 + 2.0 * i / n) * 1.15;
+					double th1 = (-1 + 2.0 * (i + 1) / n) * 1.15;
+					Vec3d p0 = ctr.add(axis.multiply(Math.sin(th0) * R)).add(d.multiply((Math.cos(th0) - 1) * R * 0.85));
+					Vec3d p1 = ctr.add(axis.multiply(Math.sin(th1) * R)).add(d.multiply((Math.cos(th1) - 1) * R * 0.85));
+					double s = (i + 0.5) / n;
+					double w = wMul * Math.pow(Math.sin(Math.PI * s), 0.8);
+					pen.streak(p0, p1, w, argb(col, la * ca), argb(col, la * ca));
+				}
+			}
+		}
+		// the hot streak trailing behind the head
+		double tl = Math.min(travelled, 10.0);
+		Vec3d tail = head.subtract(d.multiply(tl));
+		pen.streak(tail, head, 0.9, argb(0xE01410, 0f), argb(0xFF3020, 0.55f * fade));
+		pen.streak(tail, head, 0.3, argb(0xFF8060, 0f), argb(0xFFE0D0, 0.95f * fade));
+		pen.glow(head, 1.5, 0xFF2010, 0.45f * fade);
+		pen.glow(head, 0.5, 0xFFFFFF, 0.8f * fade);
+		// sparks and embers flying off the wave
+		for (int i = 0; i < 22; i++) {
+			float life = 0.45f + 0.5f * rnd(e.seed, i + 800);
+			float born = rnd(e.seed, i + 820) * Math.min(age, 1.0f);
+			float k = (age - born) / life;
+			if (k < 0f || k >= 1f) {
+				continue;
+			}
+			double u = Math.min(e.maxDist, 34.0 * born);
+			Vec3d p0 = e.pos.add(d.multiply(u)).add(right.multiply((rnd(e.seed, i + 840) - 0.5) * 3.0))
+					.add(0, (rnd(e.seed, i + 860) - 0.3) * 1.6 + 1.4 * k, 0);
+			pen.glow(p0, 0.05 + 0.04 * (1 - k), mix(0xFFD0A0, 0xA01008, k), 0.9f * (1 - k) * fade);
 		}
 	}
 

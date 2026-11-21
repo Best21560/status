@@ -19,6 +19,7 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
 
 import java.util.List;
+import net.minecraft.util.math.Box;
 
 /**
  * The Slayer class: Rage gauge, Berserk mode and the five skills
@@ -537,14 +538,15 @@ public final class SlayerEngine {
 		}
 		double vh = Math.min(1.3, dist / drag);
 		r.fAir = true;
+		r.fPhase = 0;
 		r.fStart = now;
-		r.fMaxEnd = now + 45;
+		r.fMaxEnd = now + 100;
 		r.fFlight = ticks;
 		r.fFell = false;
 		r.fLastY = from.y;
 		r.fTarget = t != null ? t.getUuid() : null;
 		r.fDest = from.add(flat.multiply(dist));
-		r.iframeUntil = Math.max(r.iframeUntil, now + ticks + 8);
+		r.iframeUntil = Math.max(r.iframeUntil, now + ticks + 50);
 		p.setVelocity(flat.x * vh, LEAP_VY, flat.z * vh);
 		p.velocityModified = true;
 		p.networkHandler.sendPacket(new EntityVelocityUpdateS2CPacket(p));
@@ -570,18 +572,42 @@ public final class SlayerEngine {
 		Vec3d facing = r.fDest != null ? new Vec3d(r.fDest.x - pos.x, 0, r.fDest.z - pos.z) : p.getRotationVec(1f);
 		facing = facing.lengthSquared() < 0.04 ? new Vec3d(p.getRotationVec(1f).x, 0, p.getRotationVec(1f).z) : facing;
 		facing = facing.lengthSquared() < 1e-6 ? new Vec3d(0, 0, 1) : facing.normalize();
-		if (!r.fFell && t >= Math.max(4, r.fFlight - 6)) {
-			// after the spin: the blade comes down
-			r.fFell = true;
-			anim(p, PoseClient.SLAM);
-			p.swingHand(Hand.MAIN_HAND, true);
-			FxNet.send(w, FxNet.SLASH, p.getEyePos().add(facing.multiply(0.6)).add(0, 0.2, 0), facing, -90f, 2);
+		if (r.fPhase == 0 && t >= 12) {
+			// at the top of the jump: hover, sword held overhead in both hands, the energy gathers
+			r.fPhase = 1;
+			r.fHoldStart = now;
+			p.setNoGravity(true);
+			FxNet.send(w, FxNet.WAVE_CHARGE, p.getPos().add(0, 2.4, 0), facing, 0f, p.getId());
+		}
+		if (r.fPhase == 1) {
+			p.setVelocity(Vec3d.ZERO);
+			p.velocityModified = true;
+			p.networkHandler.sendPacket(new EntityVelocityUpdateS2CPacket(p));
+			if (now - r.fHoldStart >= HOLD_TICKS) {
+				// the dive: the blade comes down
+				r.fPhase = 2;
+				r.fFell = true;
+				p.setNoGravity(false);
+				Vec3d rem = r.fDest == null ? Vec3d.ZERO : new Vec3d(r.fDest.x - pos.x, 0, r.fDest.z - pos.z);
+				double vh = Math.min(1.3, rem.length() / 5.0);
+				Vec3d hd = rem.lengthSquared() < 1e-4 ? Vec3d.ZERO : rem.normalize().multiply(vh);
+				p.setVelocity(hd.x, -1.5, hd.z);
+				p.velocityModified = true;
+				p.networkHandler.sendPacket(new EntityVelocityUpdateS2CPacket(p));
+				anim(p, PoseClient.SLAM);
+				p.swingHand(Hand.MAIN_HAND, true);
+				FxNet.send(w, FxNet.SLASH, p.getEyePos().add(facing.multiply(0.6)).add(0, 0.2, 0), facing, -90f, 2);
+				FxNet.send(w, FxNet.DASH, p.getPos().add(0, 1.0, 0), new Vec3d(0, -2.5, 0), 0f, 0);
+			}
+			return;
 		}
 		r.fLastY = pos.y;
-		boolean landed = (t >= 6 && p.isOnGround()) || now >= r.fMaxEnd;
+		boolean landed = (r.fPhase == 2 && t >= 6 && p.isOnGround()) || now >= r.fMaxEnd;
 		if (!landed) {
 			return;
 		}
+		p.setNoGravity(false);
+		r.fPhase = 0;
 		r.fAir = false;
 		p.fallDistance = 0f;
 		Vec3d c = p.getPos();
@@ -608,6 +634,49 @@ public final class SlayerEngine {
 		FxNet.send(w, FxNet.SLASH, c.add(facing.multiply(1.4)).add(0, 0.9, 0), facing, -90f, 2);
 		FxNet.send(w, FxNet.SHOCK, c.add(0, 0.05, 0), Vec3d.ZERO, 7.5f, 2);
 		FxNet.send(w, FxNet.FLASH, c, Vec3d.ZERO, 0.4f, 1);
+		// the red energy wave rushes forward along the ground
+		r.wActive = true;
+		r.wPos = c.add(facing.multiply(1.5)).add(0, 0.9, 0);
+		r.wDir = facing;
+		r.wLeft = WAVE_TICKS;
+		r.wHit.clear();
+		FxNet.send(w, FxNet.WAVE, r.wPos, facing, WAVE_TICKS / 20f, p.getId());
+	}
+
+	private static final int HOLD_TICKS = 16;
+	private static final int WAVE_TICKS = 20;
+	private static final double WAVE_STEP = 1.7;
+
+	private static void tickWave(ServerPlayerEntity p, PlayerRes r, long now) {
+		if (!r.wActive || r.wPos == null) {
+			return;
+		}
+		ServerWorld w = p.getServerWorld();
+		Vec3d from = r.wPos;
+		Vec3d to = from.add(r.wDir.multiply(WAVE_STEP));
+		BlockHitResult hit = w.raycast(new RaycastContext(from, to, RaycastContext.ShapeType.COLLIDER,
+				RaycastContext.FluidHandling.NONE, p));
+		boolean wall = hit.getType() != HitResult.Type.MISS;
+		Vec3d end = wall ? hit.getPos() : to;
+		Box box = new Box(from, end).expand(1.7, 1.5, 1.7);
+		for (LivingEntity e : w.getEntitiesByClass(LivingEntity.class, box,
+				x -> x.isAlive() && x != p && !x.isSpectator() && !(x instanceof TameableEntity t && t.isOwner(p)))) {
+			if (r.wHit.add(e.getUuid())) {
+				strike(p, e, base(p) * 2.6f);
+				e.takeKnockback(1.4, -r.wDir.x, -r.wDir.z);
+				e.setVelocity(e.getVelocity().add(0, 0.3, 0));
+				e.velocityModified = true;
+				FxNet.send(w, FxNet.IMPACT, chest(e), r.wDir, 1.8f, 2);
+			}
+		}
+		r.wPos = end;
+		r.wLeft--;
+		if (wall || r.wLeft <= 0) {
+			r.wActive = false;
+			if (wall) {
+				FxNet.send(w, FxNet.SHOCK, end, Vec3d.ZERO, 3f, 2);
+			}
+		}
 	}
 
 	// ------------------------------------------------------------------ 5. Final Judgment (cutscene)
@@ -805,6 +874,9 @@ public final class SlayerEngine {
 		r.slashAt = 0;
 		r.pLock = false;
 		r.pTarget = null;
+		r.fPhase = 0;
+		r.wActive = false;
+		p.setNoGravity(false);
 		if (r.jTarget != null) {
 			Entity e = p.getServerWorld().getEntity(r.jTarget);
 			if (e instanceof LivingEntity le) {
@@ -836,6 +908,7 @@ public final class SlayerEngine {
 		tickCounter(p, r, now);
 		tickJudgment(p, r, now);
 		tickFatal(p, r, now);
+		tickWave(p, r, now);
 		tickSlash(p, r, now);
 
 		if (r.bIntroStart > 0) {

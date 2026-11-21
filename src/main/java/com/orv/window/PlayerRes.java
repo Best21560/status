@@ -182,6 +182,15 @@ public class PlayerRes {
 	public Vec3d fDest = null;
 	public boolean fFell = false;
 	public int fFlight = 20;
+	/** Fatal Strike phase: 0 leap, 1 hover and charge with the sword overhead, 2 dive. */
+	public int fPhase = 0;
+	public long fHoldStart = 0;
+	/** The red energy wave fired when Fatal Strike lands. */
+	public boolean wActive = false;
+	public net.minecraft.util.math.Vec3d wPos = null;
+	public net.minecraft.util.math.Vec3d wDir = null;
+	public int wLeft = 0;
+	public final java.util.Set<java.util.UUID> wHit = new java.util.HashSet<>();
 	/** Slash lands a moment after the key press (when the swing connects): tick, and which way it swings. */
 	public long slashAt = 0;
 	public boolean slashFlipNow = false;

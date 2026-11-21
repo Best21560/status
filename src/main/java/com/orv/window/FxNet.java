@@ -37,6 +37,11 @@ public final class FxNet {
 	/** Light trail that follows a flying player: a = flight seconds, b = entity id. */
 	public static final int LEAP = 18;
 
+	/** Red energy wave (pos = start, dir = direction, b = entity id of the caster). */
+	public static final int WAVE = 19;
+	/** Energy gathering above the head of a hovering Slayer (pos = above the head, b = entity id). */
+	public static final int WAVE_CHARGE = 20;
+
 	private static PacketByteBuf make(int type, Vec3d pos, Vec3d dir, float a, int b) {
 		PacketByteBuf out = PacketByteBufs.create();
 		out.writeVarInt(type);

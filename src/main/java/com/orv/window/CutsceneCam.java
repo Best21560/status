@@ -15,12 +15,13 @@ public final class CutsceneCam {
 	private CutsceneCam() {
 	}
 
-	/** Script 0 = Berserk (5.2 s), script 1 = Relentless Pursuit (3.8 s). */
+	/** Script 0 = Berserk (5.2 s), script 1 = Relentless Pursuit (3.8 s), script 2 = Final Judgment (26.5 s, same clock as SlayerEngine.tickJudgment). */
 	private static final float[][] CUT_TABLE = {
 			{0f, 0.9f, 1.8f, 2.6f, 2.7f, 3.7f, 4.5f},
-			{0f, 0.5f, 0.85f, 1.1f, 1.35f, 1.6f, 1.9f, 2.25f, 3.0f}
+			{0f, 0.5f, 0.85f, 1.1f, 1.35f, 1.6f, 1.9f, 2.25f, 3.0f},
+			{0f, 4.5f, 5f, 7.5f, 9f, 12f, 13f, 16.5f, 17.5f, 19f, 22f, 24.5f, 25.5f}
 	};
-	private static final float[] TOTALS = {5.2f, 3.8f};
+	private static final float[] TOTALS = {5.2f, 3.8f, 26.5f};
 	private static int script = 0;
 	private static int targetId = -1;
 
@@ -29,7 +30,7 @@ public final class CutsceneCam {
 	private static boolean logged = false;
 
 	public static void start(int sc, int target) {
-		script = Math.max(0, Math.min(1, sc));
+		script = Math.max(0, Math.min(2, sc));
 		targetId = target;
 		logged = false;
 		t0 = System.nanoTime();
@@ -98,6 +99,10 @@ public final class CutsceneCam {
 
 		if (script == 1) {
 			applyPursuit(cam, p, f, s, k, t, td);
+			return;
+		}
+		if (script == 2) {
+			applyJudgment(cam, p, f, s, k, t, td);
 			return;
 		}
 		double dist;
@@ -207,7 +212,7 @@ public final class CutsceneCam {
 			}
 		}
 		Vec3d a = new Vec3d(q.x - p.x, 0, q.z - p.z);
-		a = a.lengthSquared() < 1e-4 ? f : a.normalize(); // from the Slayer to the target
+		a = a.lengthSquared() < 1e-4 ? f : a.normalize();
 		Vec3d side = new Vec3d(-a.z, 0, a.x);
 		Vec3d m = new Vec3d((p.x + q.x) / 2, Math.min(p.y, q.y), (p.z + q.z) / 2);
 		Vec3d focus;
@@ -217,7 +222,7 @@ public final class CutsceneCam {
 		double ty;
 		float fv;
 		switch (s) {
-			case 0 -> { // face close-up
+			case 0 -> {
 				focus = p;
 				fwd = a;
 				dist = lerp(1.25f, 0.9f, k);
@@ -225,7 +230,7 @@ public final class CutsceneCam {
 				ty = 1.66;
 				fv = 36f;
 			}
-			case 1 -> { // wide low side shot
+			case 1 -> {
 				focus = m;
 				fwd = side;
 				dist = lerp(7.5f, 6.0f, k);
@@ -241,7 +246,7 @@ public final class CutsceneCam {
 				ty = 1.3;
 				fv = 60f;
 			}
-			case 3 -> { // over the shoulder
+			case 3 -> {
 				focus = m;
 				fwd = a.multiply(-1).add(side.multiply(0.35)).normalize();
 				dist = 2.6;
@@ -265,7 +270,7 @@ public final class CutsceneCam {
 				ty = 1.4;
 				fv = 52f;
 			}
-			case 6 -> { // the charge: face again, even closer
+			case 6 -> {
 				focus = p;
 				fwd = a;
 				dist = lerp(0.85f, 0.68f, k);
@@ -273,7 +278,7 @@ public final class CutsceneCam {
 				ty = 1.66;
 				fv = 32f;
 			}
-			case 7 -> { // the final slash, seen from far away
+			case 7 -> {
 				focus = m;
 				fwd = rot(side, 0.5);
 				dist = lerp(9.0f, 10.5f, k);
@@ -281,7 +286,7 @@ public final class CutsceneCam {
 				ty = 1.5;
 				fv = 70f;
 			}
-			default -> { // hero pose
+			default -> {
 				focus = p;
 				fwd = rot(a, 0.35);
 				dist = lerp(3.8f, 3.1f, k);
@@ -293,6 +298,145 @@ public final class CutsceneCam {
 		Vec3d pos = focus.add(fwd.x * dist, h, fwd.z * dist);
 		Vec3d target = new Vec3d(focus.x, focus.y + ty, focus.z);
 		double sh = s == 6 ? 0.03 : 0.008;
+		double tt = t * 31.0;
+		pos = pos.add(Math.sin(tt) * sh, Math.cos(tt * 1.3) * sh, Math.sin(tt * 0.7 + 1) * sh);
+		Vec3d d = target.subtract(pos);
+		double len = d.length();
+		if (len < 1e-4) {
+			return;
+		}
+		float yw = (float) Math.toDegrees(Math.atan2(-d.x, d.z));
+		float pt = (float) -Math.toDegrees(Math.asin(d.y / len));
+		if (cam instanceof CameraAccess acc) {
+			acc.orv$set(pos, yw, pt);
+			fov = fv;
+		}
+	}
+
+	/** Final Judgment: 13 shots following the server timeline (P = the Slayer, Q = the target). */
+	private static void applyJudgment(Camera cam, Vec3d p, Vec3d f, int s, float k, float t, float td) {
+		Vec3d q = p.add(f.multiply(3.0));
+		net.minecraft.client.world.ClientWorld w = MinecraftClient.getInstance().world;
+		if (w != null && targetId >= 0) {
+			Entity te = w.getEntityById(targetId);
+			if (te != null) {
+				q = te.getLerpedPos(td);
+			}
+		}
+		Vec3d a = new Vec3d(q.x - p.x, 0, q.z - p.z);
+		a = a.lengthSquared() < 1e-4 ? f : a.normalize();
+		Vec3d side = new Vec3d(-a.z, 0, a.x);
+		Vec3d m = new Vec3d((p.x + q.x) / 2, Math.min(p.y, q.y), (p.z + q.z) / 2);
+		Vec3d focus = p;
+		Vec3d fwd = a.multiply(-1);
+		double dist = 3;
+		double h = 1;
+		double ty = 1.4;
+		float fv = 60f;
+		switch (s) {
+			case 0 -> { // night sky: looking up at the lone Slayer
+				fwd = a.multiply(-1);
+				dist = lerp(3.5f, 2.6f, k);
+				h = 0.2;
+				ty = lerp(2.0f, 4.0f, k);
+				fv = 62f;
+			}
+			case 1 -> { // the star flares
+				dist = 2.6;
+				h = 0.2;
+				ty = 4.5;
+				fv = 70f;
+			}
+			case 2 -> { // face close-up: charging
+				fwd = a;
+				dist = lerp(1.3f, 0.8f, k);
+				h = 1.68;
+				ty = 1.66;
+				fv = 34f;
+			}
+			case 3 -> { // the aura erupts: orbit
+				fwd = rot(a.multiply(-1), k * 1.6);
+				dist = lerp(4.5f, 6.5f, k);
+				h = lerp(0.6f, 2.6f, k);
+				ty = 1.4;
+				fv = 72f;
+			}
+			case 4 -> { // low side shot: the rush and the spin
+				focus = m;
+				fwd = side;
+				dist = lerp(6.5f, 5.0f, k);
+				h = 0.3;
+				ty = 1.3;
+				fv = 74f;
+			}
+			case 5 -> { // over the shoulder
+				focus = m;
+				fwd = a.multiply(-1).add(side.multiply(0.4)).normalize();
+				dist = 3.0;
+				h = 1.7;
+				ty = 1.3;
+				fv = 56f;
+			}
+			case 6 -> { // low wide shot looking up: the leap and the charge overhead
+				focus = p;
+				fwd = rot(side, 0.4);
+				dist = lerp(6.0f, 8.0f, k);
+				h = 0.1;
+				ty = lerp(2.6f, 4.0f, k);
+				fv = 74f;
+			}
+			case 7 -> { // the dive, from the side
+				focus = m;
+				fwd = side.multiply(-1);
+				dist = 9.0;
+				h = 1.2;
+				ty = 1.6;
+				fv = 66f;
+			}
+			case 8 -> { // the strike
+				focus = q;
+				fwd = rot(a.multiply(-1), 0.7);
+				dist = lerp(3.4f, 4.6f, k);
+				h = 1.0;
+				ty = 1.4;
+				fv = 58f;
+			}
+			case 9 -> { // the target floats, the Slayer steps back: very wide
+				focus = m;
+				fwd = rot(side, -0.3);
+				dist = lerp(8.0f, 11.0f, k);
+				h = 0.5;
+				ty = 2.0;
+				fv = 70f;
+			}
+			case 10 -> { // the rush and the flurry: orbit around the target
+				focus = q;
+				fwd = rot(a.multiply(-1), k * 3.0);
+				dist = 3.2;
+				h = 1.3;
+				ty = 2.2;
+				fv = 62f;
+			}
+			case 11 -> { // the big finisher
+				focus = m;
+				fwd = side;
+				dist = lerp(5.0f, 8.0f, k);
+				h = 0.6;
+				ty = 1.8;
+				fv = 68f;
+			}
+			default -> { // the white beam / aftermath: pull back and up
+				focus = q;
+				fwd = a.multiply(-1);
+				dist = lerp(8.0f, 14.0f, k);
+				h = lerp(1.0f, 4.0f, k);
+				ty = 2.0;
+				fv = 66f;
+			}
+		}
+		Vec3d pos = focus.add(fwd.x * dist, h, fwd.z * dist);
+		Vec3d target = new Vec3d(focus.x, focus.y + ty, focus.z);
+		double sh = (s == 2 || s == 10) ? 0.03 : 0.008;
 		double tt = t * 31.0;
 		pos = pos.add(Math.sin(tt) * sh, Math.cos(tt * 1.3) * sh, Math.sin(tt * 0.7 + 1) * sh);
 		Vec3d d = target.subtract(pos);
@@ -320,8 +464,8 @@ public final class CutsceneCam {
 			return;
 		}
 		int s = shot(t);
-		boolean lines = script == 0 ? (s == 2 || s == 3 || s == 5) : (s == 1 || s == 4 || s == 7);
-		boolean close = script == 0 ? (s == 0 || s == 4) : (s == 0 || s == 6);
+		boolean lines = script == 0 ? (s == 2 || s == 3 || s == 5) : script == 1 ? (s == 1 || s == 4 || s == 7) : (s == 4 || s == 7 || s == 9 || s == 11);
+		boolean close = script == 0 ? (s == 0 || s == 4) : script == 1 ? (s == 0 || s == 6) : (s == 2 || s == 10);
 		if (lines) {
 			double now = System.nanoTime() / 1_000_000_000.0;
 			int n = 26;
@@ -337,6 +481,28 @@ public final class CutsceneCam {
 				int al = (int) (70 + 80 * (1f - mid));
 				ctx.fill(x, y, x + len, y + 1 + (i % 3 == 0 ? 1 : 0), (al << 24) | 0xFFFFFF);
 			}
+		}
+		if (script == 2 && t < 4.7f) {
+			// night sky with stars and one glowing star that swells until the flash at 4.5 s
+			float dark = t < 4.5f ? 0.8f : 0.8f * Math.max(0f, 1f - (t - 4.5f) / 0.2f);
+			ctx.fill(0, 0, w, h, Fx.argb(0x02030A, dark));
+			for (int i = 0; i < 90; i++) {
+				float sx = Fx.rnd(7001, i) * w;
+				float sy = Fx.rnd(7002, i) * h * 0.85f;
+				float tw = 0.4f + 0.6f * (float) Math.abs(Math.sin(t * (1.5 + Fx.rnd(7003, i) * 3) + i));
+				int sz = Fx.rnd(7004, i) > 0.9f ? 2 : 1;
+				ctx.fill((int) sx, (int) sy, (int) sx + sz, (int) sy + sz, Fx.argb(0xFFFFFF, tw * dark));
+			}
+			float grow = Math.min(1f, t / 4.5f);
+			int cx = w / 2;
+			int cy = (int) (h * 0.32f);
+			for (int i = 7; i >= 1; i--) {
+				float rad = (6 + 70 * grow * grow) * i / 7f;
+				ctx.fill((int) (cx - rad), (int) (cy - 1 - rad * 0.04f), (int) (cx + rad), (int) (cy + 1 + rad * 0.04f), Fx.argb(0xFFFFFF, 0.10f * dark));
+				ctx.fill((int) (cx - 1 - rad * 0.04f), (int) (cy - rad), (int) (cx + 1 + rad * 0.04f), (int) (cy + rad), Fx.argb(0xFFFFFF, 0.10f * dark));
+			}
+			int core = (int) (3 + 9 * grow);
+			ctx.fill(cx - core, cy - core, cx + core, cy + core, Fx.argb(0xFFF4C0, 0.9f * dark));
 		}
 		if (close) {
 			Fx.vignettePublic(ctx, w, h, 0x000000, 0.55f);
