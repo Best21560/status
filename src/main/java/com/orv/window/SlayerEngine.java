@@ -45,7 +45,7 @@ public final class SlayerEngine {
 
 	private static final int CUTSCENE_MAX = 100;
 	/** The Berserk cut-scene (3 seconds): charge, chest beating, roar, ground slam. */
-	private static final int INTRO_TICKS = 60;
+	private static final int INTRO_TICKS = 104;
 	private static final double LEAP_VY = 0.8;
 
 	public static boolean is(PlayerRes r) {
@@ -96,10 +96,10 @@ public final class SlayerEngine {
 		long t = now - r.bIntroStart;
 		ServerWorld w = p.getServerWorld();
 		p.fallDistance = 0f;
-		if (t >= 6 && t < 22 && t % 5 == 1) {
-			p.swingHand(t % 10 == 1 ? Hand.MAIN_HAND : Hand.OFF_HAND, true);
+		if (t >= 10 && t < 38 && t % 6 == 4) {
+			p.swingHand(t % 12 == 4 ? Hand.MAIN_HAND : Hand.OFF_HAND, true);
 		}
-		if (t == 24) {
+		if (t == 53) {
 			// the roar: everybody around is thrown back, the body jumps
 			Vec3d c = p.getPos();
 			FxNet.send(w, FxNet.BERSERK_START, c, Vec3d.ZERO, 0f, 0);
@@ -110,7 +110,7 @@ public final class SlayerEngine {
 			}
 			p.setVelocity(0, 0.36, 0);
 			p.velocityModified = true;
-		} else if (t == 50) {
+		} else if (t == 88) {
 			EpicLink.play(p, "GREATSWORD_AIR_SLASH");
 			FxNet.send(w, FxNet.SHOCK, p.getPos().add(0, 0.05, 0), Vec3d.ZERO, 9f, 2);
 			FxNet.sendTo(p, FxNet.FLASH, p.getPos(), Vec3d.ZERO, 0.6f, 1);

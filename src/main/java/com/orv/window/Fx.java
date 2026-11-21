@@ -109,7 +109,7 @@ public final class Fx {
 			berserkTicks--;
 		}
 		// safety: the server says the cutscene lock is over but the end packet got lost
-		if (cutscene && !locked && System.currentTimeMillis() - cutsceneAt > 3000) {
+		if (cutscene && !locked && System.currentTimeMillis() - cutsceneAt > 7000) {
 			endCutscene(mc);
 		}
 	}
@@ -122,6 +122,7 @@ public final class Fx {
 		berserkTicks = 0;
 		locked = false;
 		cutscene = false;
+		CutsceneCam.stop();
 		savedView = null;
 	}
 
@@ -168,7 +169,7 @@ public final class Fx {
 			case FxNet.GRAB -> 0.7f;
 			case FxNet.PARRY -> 0.4f;
 			case FxNet.BERSERK_START -> 1.7f;
-				case FxNet.CHARGE -> 1.3f;
+				case FxNet.CHARGE -> 2.4f;
 				case FxNet.LEAP -> a + 0.6f;
 			case FxNet.LB_CIRCLE -> 1.4f;
 			case FxNet.PROJ -> Math.max(0.2f, a) + 0.1f;
@@ -264,6 +265,10 @@ public final class Fx {
 		}
 	}
 
+	static void vignettePublic(DrawContext ctx, int w, int h, int rgb, float strength) {
+		vignette(ctx, w, h, rgb, strength);
+	}
+
 	private static void flash(float power, int rgb) {
 		flashAt = System.nanoTime();
 		flashPower = power;
@@ -279,6 +284,7 @@ public final class Fx {
 		cutsceneAt = System.currentTimeMillis();
 		if (front) {
 			introAt = System.nanoTime();
+			CutsceneCam.start();
 		}
 		mc.options.setPerspective(front ? Perspective.THIRD_PERSON_FRONT : Perspective.THIRD_PERSON_BACK);
 	}
@@ -288,6 +294,7 @@ public final class Fx {
 			return;
 		}
 		cutscene = false;
+		CutsceneCam.stop();
 		cutsceneEndAt = System.currentTimeMillis();
 		if (savedView != null) {
 			mc.options.setPerspective(savedView);
@@ -564,8 +571,8 @@ public final class Fx {
 		}
 		if (introAt > 0) {
 			float t = (System.nanoTime() - introAt) / 1_000_000_000f;
-			if (t < 3.6f) {
-				return clamp01((t - 1.0f) / 0.9f);
+			if (t < 5.6f) {
+				return clamp01((t - 2.2f) / 1.0f);
 			}
 		}
 		if (OrvWindowClient.slayer && OrvWindowClient.rage >= 70f) {
@@ -1289,12 +1296,14 @@ public final class Fx {
 		// Berserk cut-scene: the screen darkens and reddens while the Slayer roars
 		if (introAt > 0 && berserkTicks <= 0) {
 			float it = (System.nanoTime() - introAt) / 1_000_000_000f;
-			if (it < 3.2f) {
-				float k = clamp01((it - 0.2f) / 1.0f) * (1f - clamp01((it - 2.7f) / 0.5f));
+			if (it < 5.2f) {
+				float k = clamp01((it - 0.3f) / 1.0f) * (1f - clamp01((it - 4.6f) / 0.6f));
 				vignette(ctx, w, h, 0x000000, 0.5f * k);
 				vignette(ctx, w, h, 0xC00800, 0.35f * k * (0.8f + 0.2f * (float) Math.sin(t * 14.0)));
 			}
 		}
+
+		CutsceneCam.hud(ctx, w, h);
 
 		// cutscene: letterbox bars
 		long ms = System.currentTimeMillis();

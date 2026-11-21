@@ -84,7 +84,7 @@ public final class PoseClient {
 			case SLAM -> 0.75f;
 			case JUDGE -> 3.8f;
 			case DASH -> 0.35f;
-			case ROAR -> 3.0f;
+			case ROAR -> 5.0f;
 			case COUNTER -> 0.6f;
 			case FAST_R, FAST_L -> 0.26f;
 			default -> 0.4f;
@@ -224,15 +224,16 @@ public final class PoseClient {
 				}
 			}
 			case ROAR -> {
-				keys(K_ROAR, t, o);
-				if (t > 0.3f && t < 1.15f) {
-					float env = Math.min(1f, Math.min((t - 0.3f) / 0.1f, (1.15f - t) / 0.1f));
+				float ts = t * 0.6f; // the animation is stretched to 5 seconds
+				keys(K_ROAR, ts, o);
+				if (ts > 0.3f && ts < 1.15f) {
+					float env = Math.min(1f, Math.min((ts - 0.3f) / 0.1f, (1.15f - ts) / 0.1f));
 					float s = (float) Math.sin(t * 22f);
 					o[0] += 0.4f * env * s;
 					o[3] -= 0.4f * env * s;
 					o[6] += 0.08f * env * Math.abs(s);
 				}
-				if (t > 1.6f && t < 2.55f) {
+				if (ts > 1.6f && ts < 2.55f) {
 					o[6] += 0.05f * (float) Math.sin(t * 45f);
 					o[8] += 0.07f * (float) Math.sin(t * 50f);
 				}

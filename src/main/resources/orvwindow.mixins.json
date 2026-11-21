@@ -12,6 +12,8 @@
   "client": [
     "InGameHudMixin",
     "BipedModelMixin",
-    "LivingRendererMixin"
+    "LivingRendererMixin",
+    "CameraMixin",
+    "GameRendererMixin"
   ]
 }
