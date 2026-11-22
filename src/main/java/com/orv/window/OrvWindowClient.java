@@ -59,6 +59,7 @@ public class OrvWindowClient implements ClientModInitializer {
 	public static KeyBinding slashKey;
 	public static KeyBinding pursuitKey;
 	public static KeyBinding fatalKey;
+	private static boolean fatalHeld = false;
 	public static KeyBinding judgmentKey;
 	public static KeyBinding berserkKey;
 
@@ -110,6 +111,10 @@ public class OrvWindowClient implements ClientModInitializer {
 				MoveClient.tick(client);
 			}
 			BerserkClient.tick(client);
+			if (fatalHeld && !(slayer && !noControl && client.player != null && client.currentScreen == null)) {
+				fatalHeld = false;
+				sendAction(15);
+			}
 			if (slayer && !noControl && client.player != null && client.currentScreen == null) {
 				while (slashKey.wasPressed()) {
 					sendAction(10);
@@ -117,9 +122,17 @@ public class OrvWindowClient implements ClientModInitializer {
 				while (pursuitKey.wasPressed()) {
 					sendAction(11);
 				}
+				// Fatal Strike is held: press starts the charge, letting go leaps
 				while (fatalKey.wasPressed()) {
-					sendAction(12);
+					// drained; the held state below decides
 				}
+				boolean down = fatalKey.isPressed();
+				if (down && !fatalHeld) {
+					sendAction(12);
+				} else if (!down && fatalHeld) {
+					sendAction(15);
+				}
+				fatalHeld = down;
 				while (judgmentKey.wasPressed()) {
 					sendAction(13);
 				}

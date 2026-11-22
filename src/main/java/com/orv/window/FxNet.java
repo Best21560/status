@@ -51,6 +51,8 @@ public final class FxNet {
 	public static final int SHADOW = 256;
 	/** Final Judgment energy blast: pos = start, dir = direction, a = seconds, b = caster id. */
 	public static final int BLAST = 24;
+	/** A long thin line of light left by a great cut: pos = centre, dir = along the line, a = length, b = 1 heavy. */
+	public static final int CUTLINE = 25;
 
 	private static PacketByteBuf make(int type, Vec3d pos, Vec3d dir, float a, int b) {
 		PacketByteBuf out = PacketByteBufs.create();

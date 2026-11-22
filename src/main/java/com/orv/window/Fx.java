@@ -195,6 +195,7 @@ public final class Fx {
 				case FxNet.WAVE -> a + 0.7f;
 				case FxNet.WAVE_CHARGE -> 0.9f;
 				case FxNet.BLAST -> a + 0.7f;
+				case FxNet.CUTLINE -> b == 1 ? 0.6f : 0.42f;
 			case FxNet.LB_CIRCLE -> 1.4f;
 			case FxNet.PROJ -> Math.max(0.2f, a) + 0.1f;
 			case FxNet.HEAL_PULSE -> 1.0f;
@@ -354,6 +355,9 @@ public final class Fx {
 			}
 			case FxNet.BLAST -> {
 				mc.world.playSound(p.x, p.y, p.z, OrvSounds.JBLAST, SoundCategory.PLAYERS, 2.4f, 1f, false);
+				return true;
+			}
+			case FxNet.CUTLINE -> {
 				return true;
 			}
 			case FxNet.CHARGE -> {
@@ -801,6 +805,7 @@ public final class Fx {
 				case FxNet.LEAP -> drawLeap(dark, e, age, true);
 				case FxNet.WAVE -> darkWave(dark, e, age);
 				case FxNet.BLAST -> darkBlast(dark, e, age);
+				case FxNet.CUTLINE -> darkCutLine(dark, e, tt, age);
 				default -> {
 				}
 			}
@@ -838,6 +843,7 @@ public final class Fx {
 				case FxNet.LEAP -> drawLeap(pen, e, age, false);
 				case FxNet.WAVE -> drawWave(pen, e, age);
 				case FxNet.BLAST -> drawBlast(pen, e, age);
+				case FxNet.CUTLINE -> drawCutLine(pen, e, tt, age);
 				case FxNet.WAVE_CHARGE -> drawHold(pen, e, tt);
 				case FxNet.LB_CIRCLE -> LightClient.drawCircle(pen, e.pos, e.dir, e.a, e.b, tt);
 				case FxNet.PROJ -> LightClient.drawProj(pen, e.pos, e.dir, age, e.a);
@@ -1353,6 +1359,36 @@ public final class Fx {
 	private static Vec3d waveHead(Effect e, float age) {
 		Vec3d d = e.dir.lengthSquared() < 1e-6 ? new Vec3d(0, 0, 1) : e.dir.normalize();
 		return e.pos.add(d.multiply(Math.min(e.maxDist, 34.0 * age)));
+	}
+
+	/** The cut line opens from the middle out in a few hundredths of a second, then thins away. */
+	private static void darkCutLine(Pen dark, Effect e, float tt, float age) {
+		Vec3d d = e.dir.lengthSquared() < 1e-6 ? new Vec3d(1, 0, 0) : e.dir.normalize();
+		double half = e.a * 0.5 * clamp01(age / 0.06f);
+		float w = (float) Math.pow(1f - tt, 1.5);
+		dark.streak(e.pos.subtract(d.multiply(half)), e.pos.add(d.multiply(half)), 0.5 * w, argb(0x040102, 0.6f * w), argb(0x040102, 0.6f * w));
+	}
+
+	private static void drawCutLine(Pen pen, Effect e, float tt, float age) {
+		Vec3d d = e.dir.lengthSquared() < 1e-6 ? new Vec3d(1, 0, 0) : e.dir.normalize();
+		double half = e.a * 0.5 * clamp01(age / 0.06f);
+		float w = (float) Math.pow(1f - tt, 1.5);
+		double big = e.b == 1 ? 1.3 : 0.9;
+		Vec3d a0 = e.pos.subtract(d.multiply(half));
+		Vec3d a1 = e.pos.add(d.multiply(half));
+		// soft at both ends: draw as two halves from the bright middle outwards
+		for (int side = -1; side <= 1; side += 2) {
+			Vec3d end = side < 0 ? a0 : a1;
+			pen.streak(e.pos, end, 1.3 * big * w, argb(0x9A0A0A, 0.4f * w), argb(0x9A0A0A, 0f));
+			pen.streak(e.pos, end, 0.42 * big * w, argb(0xE02818, 0.85f * w), argb(0xE02818, 0.1f * w));
+			pen.streak(e.pos, end, 0.09 * big, argb(0xFFE0D0, w), argb(0xFFE0D0, 0.2f * w));
+		}
+		pen.glow(e.pos, 1.4 * big * w, 0xC01410, 0.5f * w);
+		for (int i = 0; i < 14; i++) {
+			double u = (rnd(e.seed, i) - 0.5) * 2 * half;
+			Vec3d p = e.pos.add(d.multiply(u)).add((rnd(e.seed, i + 30) - 0.5) * tt * 1.5, (rnd(e.seed, i + 60) - 0.3) * tt * 1.5, (rnd(e.seed, i + 90) - 0.5) * tt * 1.5);
+			pen.glow(p, 0.06, 0xFFB090, 0.9f * (1 - tt));
+		}
 	}
 
 	/** 0..1: how far the blast has grown out, and its fade at the end. */

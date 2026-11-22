@@ -339,5 +339,6 @@
   "orvwindow.msg.rage_full": "Rage เต็มแล้ว — กดปุ่ม Berserk เพื่อเข้าโหมด",
   "orvwindow.msg.rage_not_full": "Rage ยังไม่เต็ม",
   "orvwindow.msg.rogue_combo": "§bCombo! Damage +25%",
-  "orvwindow.msg.rogue_dodge": "§7Dodged!"
+  "orvwindow.msg.rogue_dodge": "§7Dodged!",
+  "orvwindow.msg.fatal_hold": "§7Hold the Fatal Strike key for 5 seconds, then let go"
 }

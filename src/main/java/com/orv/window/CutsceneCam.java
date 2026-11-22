@@ -19,7 +19,7 @@ public final class CutsceneCam {
 	private static final float[][] CUT_TABLE = {
 			{0f, 0.9f, 1.8f, 2.6f, 2.7f, 3.7f, 4.5f},
 			{0f, 0.5f, 0.85f, 1.1f, 1.35f, 1.6f, 1.9f, 2.25f, 3.0f},
-			{0f, 4f, 4.8f, 5.5f, 6.5f, 9f, 9.5f, 11.5f, 12.5f, 13f, 14.5f}
+			{0f, 4f, 4.75f, 5.25f, 6.0f, 7.0f, 8.25f, 9.0f, 10.0f, 11.25f, 11.5f, 12.25f, 12.75f, 14.5f}
 	};
 	private static final float[] TOTALS = {5.2f, 3.8f, 16f};
 	private static int script = 0;
@@ -356,6 +356,9 @@ public final class CutsceneCam {
 		double h;
 		double ty;
 		float fv;
+		Vec3d tq = new Vec3d(q.x - p.x, 0, q.z - p.z);
+		tq = tq.lengthSquared() < 1e-4 ? a : tq.normalize(); // the way the Slayer faces now
+		Vec3d tside = new Vec3d(-tq.z, 0, tq.x);
 		switch (s) {
 			case 0 -> { // the cut-in: game view from behind and above, slowly creeping in
 				focus = p;
@@ -365,71 +368,95 @@ public final class CutsceneCam {
 				ty = 1.2;
 				fv = 70f;
 			}
-			case 1 -> { // the hand closes on the hilt: low and close from the side
+			case 1 -> { // reaching for the hilt and drawing: close on the upper body
 				focus = p;
-				fwd = rot(side, 0.5);
-				dist = lerp(1.6f, 1.3f, k);
-				h = 1.0;
-				ty = 1.15;
-				fv = 40f;
+				fwd = rot(tq, 0.8);
+				dist = lerp(1.7f, 1.4f, k);
+				h = 1.4;
+				ty = 1.6;
+				fv = 44f;
 			}
-			case 2 -> { // the face, lunging at the camera
+			case 2 -> { // the burst: low and wide in front
 				focus = p;
-				fwd = a;
+				fwd = tq;
+				dist = lerp(4.0f, 5.5f, k);
+				h = 0.5;
+				ty = 1.3;
+				fv = 74f;
+			}
+			case 3 -> { // the face, lunging at the camera
+				focus = p;
+				fwd = tq;
 				dist = lerp(1.6f, 0.7f, k * k);
 				h = 1.6;
 				ty = 1.62;
 				fv = lerp(40f, 56f, k);
 			}
-			case 3 -> { // the first great cut, seen from the side
+			case 4 -> { // passing through the target, cutting: from the side
 				focus = q;
 				fwd = rot(side, -0.35);
-				dist = 4.8;
+				dist = 5.0;
 				h = 0.9;
 				ty = 1.2;
 				fv = 66f;
 			}
-			case 4 -> { // the passes: a low camera skimming the ground around them
+			case 5 -> { // the cuts burst open, the Slayer dashes off: skimming the ground
 				focus = m;
-				fwd = rot(side, k * 2.4 - 0.6);
-				dist = lerp(6.5f, 5.0f, k);
+				fwd = rot(side, k * 2.0 - 0.5);
+				dist = lerp(6.5f, 7.5f, k);
 				h = 0.25;
 				ty = 0.9;
 				fv = 78f;
 			}
-			case 5 -> { // sword up: looking up at the Slayer from close
+			case 6 -> { // the sword raised: looking up at the Slayer
 				focus = p;
-				fwd = rot(a, 0.6);
-				dist = 1.9;
+				fwd = rot(tq, 0.6);
+				dist = 2.0;
 				h = 0.3;
-				ty = 2.2;
+				ty = 2.3;
 				fv = 60f;
 			}
-			case 6 -> { // the great cuts from behind the Slayer
-				focus = p;
-				fwd = a.multiply(-1).add(side.multiply(lerp(-0.6f, 0.6f, k))).normalize();
-				dist = 3.0;
-				h = 1.5;
-				ty = 1.3;
+			case 7 -> { // two great cuts through the target, from the side
+				focus = q;
+				fwd = rot(side, 0.3);
+				dist = 5.5;
+				h = 1.0;
+				ty = 1.2;
 				fv = 64f;
 			}
-			case 7 -> { // the pose: sword held back, the Slayer from the front
+			case 8 -> { // the flurry of wide cuts: over the shoulder
 				focus = p;
-				fwd = rot(a, -0.4);
-				dist = lerp(3.4f, 3.0f, k);
-				h = 1.1;
-				ty = 1.3;
-				fv = 50f;
-			}
-			case 8 -> { // the hand comes forward: side shot
-				focus = m;
-				fwd = side;
-				dist = 4.6;
-				h = 1.0;
+				fwd = tq.multiply(-1).add(tside.multiply(0.45)).normalize();
+				dist = 3.0;
+				h = 1.6;
 				ty = 1.3;
 				fv = 60f;
 			}
-			case 9 -> { // the blast: wide, along the beam
+			case 9 -> { // the face, close
+				focus = p;
+				fwd = rot(tq, -0.3);
+				dist = 1.1;
+				h = 1.6;
+				ty = 1.62;
+				fv = 40f;
+			}
+			case 10 -> { // the last great cut, wide
+				focus = m;
+				fwd = side;
+				dist = 6.0;
+				h = 0.8;
+				ty = 1.2;
+				fv = 70f;
+			}
+			case 11 -> { // the palm comes forward
+				focus = m;
+				fwd = rot(side, -0.2);
+				dist = 4.2;
+				h = 1.0;
+				ty = 1.3;
+				fv = 58f;
+			}
+			case 12 -> { // the blast: wide, along the beam
 				focus = q;
 				fwd = rot(side, 0.55);
 				dist = lerp(8.0f, 10.0f, k);
@@ -448,7 +475,7 @@ public final class CutsceneCam {
 		}
 		Vec3d pos = focus.add(fwd.x * dist, h, fwd.z * dist);
 		Vec3d target = new Vec3d(focus.x, focus.y + ty, focus.z);
-		double sh = s == 2 ? 0.02 : (s == 3 || s == 6 || s == 9 ? 0.05 * Math.max(0, 1 - k * 2) + 0.01 : 0.008);
+		double sh = s == 3 || s == 9 ? 0.02 : (s == 2 || s == 4 || s == 7 || s == 10 || s == 12 ? 0.05 * Math.max(0, 1 - k * 2) + 0.01 : 0.008);
 		double tt = t * 31.0;
 		pos = pos.add(Math.sin(tt) * sh, Math.cos(tt * 1.3) * sh, Math.sin(tt * 0.7 + 1) * sh);
 		Vec3d d = target.subtract(pos);
@@ -467,6 +494,11 @@ public final class CutsceneCam {
 	/** Field of view override (degrees) or -1. */
 	public static double fov() {
 		return active() ? fov : -1;
+	}
+
+	private static float radial(float t, float at) {
+		float x = (t - at) / 0.35f;
+		return x < 0f || x > 1f ? 0f : 1f - x;
 	}
 
 	/** The ultimate cut-in (0 - 4 s): a dark slanted band across the screen with the Slayer's face, red lightning crawling along it and the skill name. */
@@ -644,7 +676,7 @@ public final class CutsceneCam {
 			return;
 		}
 		int s = shot(t);
-		boolean lines = script == 0 ? (s == 2 || s == 3 || s == 5) : script == 1 ? (s == 1 || s == 4 || s == 7) : (s == 4 || s == 9);
+		boolean lines = script == 0 ? (s == 2 || s == 3 || s == 5) : script == 1 ? (s == 1 || s == 4 || s == 7) : (s == 5 || s == 10);
 		boolean close = script == 0 ? (s == 0 || s == 4) : script == 1 ? (s == 0 || s == 6) : false;
 		if (lines) {
 			double now = System.nanoTime() / 1_000_000_000.0;
@@ -665,6 +697,23 @@ public final class CutsceneCam {
 		if (script == 2) {
 			if (t < 4.2f) {
 				cutIn(ctx, w, h, t);
+			}
+			// radial light lines when the sword comes out and when the cuts burst open
+			float rl = Math.max(radial(t, 4.75f), radial(t, 7.5f));
+			if (rl > 0f) {
+				long fr = (long) (t * 30);
+				for (int i = 0; i < 40; i++) {
+					double ang = Fx.rnd(fr, i) * Math.PI * 2;
+					float r0 = 0.15f + 0.25f * Fx.rnd(fr, i + 50);
+					float r1 = r0 + 0.3f + 0.5f * Fx.rnd(fr, i + 100);
+					int steps = 24;
+					for (int k = 0; k < steps; k++) {
+						float u = r0 + (r1 - r0) * k / steps;
+						int px = (int) (w / 2 + Math.cos(ang) * u * w * 0.7);
+						int py = (int) (h / 2 + Math.sin(ang) * u * h * 0.7);
+						ctx.fill(px, py, px + 2, py + 1, Fx.argb(0xC8B0B0, rl * 0.55f * (k / (float) steps)));
+					}
+				}
 			}
 			// the whole Final Judgment is graded dark: crushed edges, a cold dim tint, and black at the very end
 			Fx.vignettePublic(ctx, w, h, 0x000000, 0.5f);

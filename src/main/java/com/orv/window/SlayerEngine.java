@@ -199,13 +199,20 @@ public final class SlayerEngine {
 
 	/** 10 Slash, 11 Relentless Pursuit, 12 Fatal Strike, 13 Final Judgment. */
 	public static void action(ServerPlayerEntity p, PlayerRes r, int id, long now) {
-		if (!is(r) || p.isSpectator() || locked(r) || berserk(r, now) || r.pTarget != null) {
+		if (id == 15) {
+			// Fatal Strike key released
+			if (is(r) && r.fCharging) {
+				fatalRelease(p, r, now);
+			}
+			return;
+		}
+		if (!is(r) || p.isSpectator() || locked(r) || berserk(r, now) || r.pTarget != null || r.fCharging) {
 			return;
 		}
 		switch (id) {
 			case 10 -> slash(p, r, now);
 			case 11 -> pursuit(p, r, now);
-			case 12 -> fatal(p, r, now);
+			case 12 -> fatalCharge(p, r, now);
 			case 13 -> judgment(p, r, now);
 			case 14 -> {
 				// Berserk is started by its own key, and only with full Rage
@@ -500,67 +507,110 @@ public final class SlayerEngine {
 	}
 
 	/** Leap at the target (or 6 blocks ahead), come down with a heavy slash that splits the ground. */
-	private static void fatal(ServerPlayerEntity p, PlayerRes r, long now) {
-		if (!ready(p, r, FATAL, now)) {
+	/** Fatal Strike: hold the key for 5 seconds, let go to leap ~20 blocks, land and send 8 waves out all around. */
+	private static final int CHARGE_FULL = 100;
+	private static final int CHARGE_MAX = 240;
+	private static final double LEAP_DIST = 20.0;
+	private static final double LEAP_HEIGHT = 11.0;
+	private static final int RISE_TICKS = 18;
+	private static final int HOLD_TICKS = 14;
+	private static final int WAVE_TICKS = 20;
+	private static final double WAVE_STEP = 1.7;
+
+	private static void fatalCharge(ServerPlayerEntity p, PlayerRes r, long now) {
+		if (now < r.cdEnd[FATAL]) {
+			p.sendMessage(Text.translatable("orvwindow.msg.cooldown"), true);
 			return;
 		}
-		LivingEntity t = findTarget(p, 11.0, 0.55);
+		if (r.exhausted || r.stamina < 60f) {
+			p.sendMessage(Text.translatable("orvwindow.msg.no_stamina"), true);
+			return;
+		}
+		r.fCharging = true;
+		r.fChargeStart = now;
+		r.fChargeFull = false;
+		FxNet.send(p.getServerWorld(), FxNet.CHARGE, p.getPos(), Vec3d.ZERO, 0f, 0);
+	}
+
+	private static void tickCharge(ServerPlayerEntity p, PlayerRes r, long now) {
+		if (!r.fCharging) {
+			return;
+		}
+		long t = now - r.fChargeStart;
+		ServerWorld w = p.getServerWorld();
+		p.addStatusEffect(new net.minecraft.entity.effect.StatusEffectInstance(net.minecraft.entity.effect.StatusEffects.SLOWNESS, 5, 3, false, false, false));
+		if (t % 4 == 0) {
+			int filled = (int) Math.min(20, t * 20 / CHARGE_FULL);
+			String bar = "\u00a74" + "|".repeat(filled) + "\u00a78" + "|".repeat(20 - filled);
+			p.sendMessage(Text.literal("Fatal Strike  " + bar + (filled >= 20 ? "  \u00a7cMAX" : "")), true);
+		}
+		if (t % 25 == 0 && t < CHARGE_FULL) {
+			FxNet.send(w, FxNet.WAVE_CHARGE, p.getPos().add(0, 2.4, 0), p.getRotationVec(1f), 0f, p.getId());
+		}
+		if (!r.fChargeFull && t >= CHARGE_FULL) {
+			r.fChargeFull = true;
+			FxNet.send(w, FxNet.SHOCK, p.getPos().add(0, 0.05, 0), Vec3d.ZERO, 4f, 2);
+			FxNet.send(w, FxNet.BERSERK_START, p.getPos(), Vec3d.ZERO, 0f, 0);
+		}
+		if (t >= CHARGE_MAX) {
+			fatalRelease(p, r, now);
+		}
+	}
+
+	private static void fatalRelease(ServerPlayerEntity p, PlayerRes r, long now) {
+		r.fCharging = false;
+		if (now - r.fChargeStart < CHARGE_FULL) {
+			p.sendMessage(Text.translatable("orvwindow.msg.fatal_hold"), true);
+			return;
+		}
 		if (!payStamina(p, r, 60f)) {
 			return;
 		}
 		r.cdEnd[FATAL] = now + CD[FATAL];
+		p.removeStatusEffect(net.minecraft.entity.effect.StatusEffects.SLOWNESS);
 		ServerWorld w = p.getServerWorld();
 		Vec3d from = p.getPos();
+		LivingEntity t = findTarget(p, 24.0, 0.8);
 		Vec3d flat;
 		double dist;
 		if (t != null) {
 			Vec3d to = t.getPos().subtract(from);
 			flat = new Vec3d(to.x, 0, to.z);
-			dist = Math.max(0.0, flat.length() - 1.4);
+			dist = Math.max(2.0, flat.length() - 1.2);
 		} else {
 			Vec3d look = p.getRotationVec(1f);
 			flat = new Vec3d(look.x, 0, look.z);
-			dist = 6.0;
+			dist = LEAP_DIST;
 		}
 		flat = flat.lengthSquared() < 1e-4 ? new Vec3d(0, 0, 1) : flat.normalize();
-		// stop short of walls
-		Vec3d eye = p.getEyePos();
-		BlockHitResult wall = w.raycast(new RaycastContext(eye, eye.add(flat.multiply(dist + 0.6)), RaycastContext.ShapeType.COLLIDER,
-				RaycastContext.FluidHandling.NONE, p));
-		if (wall.getType() != HitResult.Type.MISS) {
-			dist = Math.max(0.0, wall.getPos().subtract(eye).length() - 1.0);
-		}
-		int ticks = flightTicks(LEAP_VY);
-		double drag = 0;
-		for (int k = 0; k < ticks; k++) {
-			drag += Math.pow(0.91, k);
-		}
-		double vh = Math.min(1.3, dist / drag);
 		r.fAir = true;
 		r.fPhase = 0;
 		r.fStart = now;
-		r.fMaxEnd = now + 100;
-		r.fFlight = ticks;
+		r.fMaxEnd = now + RISE_TICKS + HOLD_TICKS + 80;
 		r.fFell = false;
-		r.fLastY = from.y;
+		r.fFrom = from;
 		r.fTarget = t != null ? t.getUuid() : null;
 		r.fDest = from.add(flat.multiply(dist));
-		r.iframeUntil = Math.max(r.iframeUntil, now + ticks + 50);
-		p.setVelocity(flat.x * vh, LEAP_VY, flat.z * vh);
-		p.velocityModified = true;
-		p.networkHandler.sendPacket(new EntityVelocityUpdateS2CPacket(p));
-		p.fallDistance = 0f;
+		r.iframeUntil = Math.max(r.iframeUntil, r.fMaxEnd + 10);
+		p.setNoGravity(true);
 		float[] yp = angles(p.getEyePos(), p.getEyePos().add(flat));
 		p.networkHandler.requestTeleport(p.getX(), p.getY(), p.getZ(), yp[0], 8f);
 		p.swingHand(Hand.MAIN_HAND, true);
 		EpicLink.play(p, "GREATSWORD_AIR_SLASH");
 		anim(p, PoseClient.LEAP);
-		FxNet.send(w, FxNet.SHOCK, from.add(0, 0.05, 0), Vec3d.ZERO, 3.2f, 0);
-		FxNet.send(w, FxNet.LEAP, from, flat, ticks / 20f, p.getId());
-		FxNet.send(w, FxNet.DASH, from.add(0, 1.0, 0), flat.multiply(1.5), 0f, 0);
+		FxNet.send(w, FxNet.SHOCK, from.add(0, 0.05, 0), Vec3d.ZERO, 5f, 2);
+		FxNet.send(w, FxNet.LEAP, from, flat, (RISE_TICKS + HOLD_TICKS) / 20f, p.getId());
+		FxNet.send(w, FxNet.DASH, from.add(0, 1.0, 0), new Vec3d(flat.x * 3, 4, flat.z * 3), 0f, 0);
+	}
+
+	private static void push(ServerPlayerEntity p, Vec3d v) {
+		p.setVelocity(v);
+		p.velocityModified = true;
+		p.networkHandler.sendPacket(new EntityVelocityUpdateS2CPacket(p));
 	}
 
 	private static void tickFatal(ServerPlayerEntity p, PlayerRes r, long now) {
+		tickCharge(p, r, now);
 		if (!r.fAir) {
 			return;
 		}
@@ -568,56 +618,58 @@ public final class SlayerEngine {
 		ServerWorld w = p.getServerWorld();
 		p.fallDistance = 0f;
 		Vec3d pos = p.getPos();
-		Vec3d facing = r.fDest != null ? new Vec3d(r.fDest.x - pos.x, 0, r.fDest.z - pos.z) : p.getRotationVec(1f);
-		facing = facing.lengthSquared() < 0.04 ? new Vec3d(p.getRotationVec(1f).x, 0, p.getRotationVec(1f).z) : facing;
+		Vec3d facing = new Vec3d(r.fDest.x - r.fFrom.x, 0, r.fDest.z - r.fFrom.z);
 		facing = facing.lengthSquared() < 1e-6 ? new Vec3d(0, 0, 1) : facing.normalize();
-		if (r.fPhase == 0 && t >= 12) {
-			// at the top of the jump: hover, sword held overhead in both hands, the energy gathers
-			r.fPhase = 1;
-			r.fHoldStart = now;
-			p.setNoGravity(true);
-			FxNet.send(w, FxNet.WAVE_CHARGE, p.getPos().add(0, 2.4, 0), facing, 0f, p.getId());
-		}
-		if (r.fPhase == 1) {
-			p.setVelocity(Vec3d.ZERO);
-			p.velocityModified = true;
-			p.networkHandler.sendPacket(new EntityVelocityUpdateS2CPacket(p));
-			if (now - r.fHoldStart >= HOLD_TICKS) {
-				// the dive: the blade comes down
-				r.fPhase = 2;
-				r.fFell = true;
-				p.setNoGravity(false);
-				Vec3d rem = r.fDest == null ? Vec3d.ZERO : new Vec3d(r.fDest.x - pos.x, 0, r.fDest.z - pos.z);
-				double vh = Math.min(1.3, rem.length() / 5.0);
-				Vec3d hd = rem.lengthSquared() < 1e-4 ? Vec3d.ZERO : rem.normalize().multiply(vh);
-				p.setVelocity(hd.x, -1.5, hd.z);
-				p.velocityModified = true;
-				p.networkHandler.sendPacket(new EntityVelocityUpdateS2CPacket(p));
-				anim(p, PoseClient.SLAM);
-				p.swingHand(Hand.MAIN_HAND, true);
-				FxNet.send(w, FxNet.SLASH, p.getEyePos().add(facing.multiply(0.6)).add(0, 0.2, 0), facing, -90f, 2);
-				FxNet.send(w, FxNet.DASH, p.getPos().add(0, 1.0, 0), new Vec3d(0, -2.5, 0), 0f, 0);
+		if (r.fPhase == 0) {
+			// rising on an arc: 60% of the way and LEAP_HEIGHT up at the top
+			double k = Math.min(1.0, (t + 1) / (double) RISE_TICKS);
+			Vec3d along = r.fDest.subtract(r.fFrom).multiply(0.6 * k);
+			Vec3d want = r.fFrom.add(along.x, LEAP_HEIGHT * Math.sin(k * Math.PI / 2), along.z);
+			push(p, want.subtract(pos));
+			if (t + 1 >= RISE_TICKS) {
+				r.fPhase = 1;
+				r.fHoldStart = now;
+				FxNet.send(w, FxNet.WAVE_CHARGE, want.add(0, 2.4, 0), facing, 0f, p.getId());
 			}
 			return;
 		}
-		r.fLastY = pos.y;
-		boolean landed = (r.fPhase == 2 && t >= 6 && p.isOnGround()) || now >= r.fMaxEnd;
+		if (r.fPhase == 1) {
+			push(p, Vec3d.ZERO);
+			if (now - r.fHoldStart >= HOLD_TICKS) {
+				r.fPhase = 2;
+				r.fFell = true;
+				anim(p, PoseClient.SLAM);
+				p.swingHand(Hand.MAIN_HAND, true);
+				FxNet.send(w, FxNet.SLASH, p.getEyePos().add(facing.multiply(0.6)).add(0, 0.2, 0), facing, -90f, 2);
+				FxNet.send(w, FxNet.DASH, p.getPos().add(0, 1.0, 0), r.fDest.subtract(p.getPos()), 0f, 0);
+			}
+			return;
+		}
+		// the dive: straight at the landing spot, fast
+		boolean landed = (t >= 4 && p.isOnGround()) || now >= r.fMaxEnd;
 		if (!landed) {
+			Vec3d to = r.fDest.subtract(pos);
+			Vec3d flatTo = new Vec3d(to.x, 0, to.z);
+			Vec3d v = flatTo.length() < 0.8 ? new Vec3d(0, -2.4, 0) : to.normalize().multiply(2.4);
+			if (v.y > -0.6) {
+				v = new Vec3d(v.x, -0.6, v.z);
+			}
+			push(p, v);
 			return;
 		}
 		p.setNoGravity(false);
+		push(p, Vec3d.ZERO);
 		r.fPhase = 0;
 		r.fAir = false;
 		p.fallDistance = 0f;
 		Vec3d c = p.getPos();
-		float dmg = base(p) * 3.2f;
-		float edge = 1f;
-		for (LivingEntity e : candidates(p, 4.4)) {
+		float dmg = base(p) * 3.6f;
+		for (LivingEntity e : candidates(p, 5.0)) {
 			boolean main = e.getUuid().equals(r.fTarget);
 			double dx = e.getX() - c.x;
 			double dz = e.getZ() - c.z;
 			double d = Math.sqrt(dx * dx + dz * dz);
-			float k = main ? 1f : (float) Math.max(0.45, 0.85 - d * 0.1) * edge;
+			float k = main ? 1f : (float) Math.max(0.45, 0.85 - d * 0.1);
 			float hit = e.getHealth() < 0.4f * e.getMaxHealth() ? dmg * 1.5f * k : dmg * k;
 			strike(p, e, hit);
 			e.takeKnockback(1.2, -dx, -dz);
@@ -625,55 +677,56 @@ public final class SlayerEngine {
 			e.velocityModified = true;
 			FxNet.send(w, FxNet.IMPACT, chest(e), new Vec3d(0, 1, 0), main ? 2.6f : 1.6f, 2);
 		}
-		r.iframeUntil = Math.max(r.iframeUntil, now + 6);
-		if (!r.fFell) {
-			anim(p, PoseClient.SLAM);
-		}
+		r.iframeUntil = Math.max(r.iframeUntil, now + 8);
 		p.swingHand(Hand.MAIN_HAND, true);
-		FxNet.send(w, FxNet.SLASH, c.add(facing.multiply(1.4)).add(0, 0.9, 0), facing, -90f, 2);
-		FxNet.send(w, FxNet.SHOCK, c.add(0, 0.05, 0), Vec3d.ZERO, 7.5f, 2);
-		FxNet.send(w, FxNet.FLASH, c, Vec3d.ZERO, 0.4f, 1);
-		// the red energy wave rushes forward along the ground
-		r.wActive = true;
-		r.wPos = c.add(facing.multiply(1.5)).add(0, 0.9, 0);
-		r.wDir = facing;
-		r.wLeft = WAVE_TICKS;
-		r.wHit.clear();
-		FxNet.send(w, FxNet.WAVE, r.wPos, facing, WAVE_TICKS / 20f, p.getId());
+		FxNet.send(w, FxNet.SHOCK, c.add(0, 0.05, 0), Vec3d.ZERO, 10f, 2);
+		FxNet.send(w, FxNet.FLASH, c, Vec3d.ZERO, 0.5f, 1);
+		// eight sword waves rush out all around along the ground
+		r.waves.clear();
+		for (int i = 0; i < 8; i++) {
+			double ang = i * Math.PI / 4;
+			Vec3d d = new Vec3d(facing.x * Math.cos(ang) - facing.z * Math.sin(ang), 0, facing.x * Math.sin(ang) + facing.z * Math.cos(ang));
+			PlayerRes.Wave wv = new PlayerRes.Wave();
+			wv.pos = c.add(d.multiply(1.2)).add(0, 0.9, 0);
+			wv.dir = d;
+			wv.left = WAVE_TICKS;
+			r.waves.add(wv);
+			FxNet.send(w, FxNet.WAVE, wv.pos, d, WAVE_TICKS / 20f, p.getId());
+		}
 	}
 
-	private static final int HOLD_TICKS = 16;
-	private static final int WAVE_TICKS = 20;
-	private static final double WAVE_STEP = 1.7;
-
 	private static void tickWave(ServerPlayerEntity p, PlayerRes r, long now) {
-		if (!r.wActive || r.wPos == null) {
+		if (r.waves.isEmpty()) {
 			return;
 		}
 		ServerWorld w = p.getServerWorld();
-		Vec3d from = r.wPos;
-		Vec3d to = from.add(r.wDir.multiply(WAVE_STEP));
-		BlockHitResult hit = w.raycast(new RaycastContext(from, to, RaycastContext.ShapeType.COLLIDER,
-				RaycastContext.FluidHandling.NONE, p));
-		boolean wall = hit.getType() != HitResult.Type.MISS;
-		Vec3d end = wall ? hit.getPos() : to;
-		Box box = new Box(from, end).expand(1.7, 1.5, 1.7);
-		for (LivingEntity e : w.getEntitiesByClass(LivingEntity.class, box,
-				x -> x.isAlive() && x != p && !x.isSpectator() && !(x instanceof TameableEntity t && t.isOwner(p)))) {
-			if (r.wHit.add(e.getUuid())) {
-				strike(p, e, base(p) * 2.6f);
-				e.takeKnockback(1.4, -r.wDir.x, -r.wDir.z);
-				e.setVelocity(e.getVelocity().add(0, 0.3, 0));
-				e.velocityModified = true;
-				FxNet.send(w, FxNet.IMPACT, chest(e), r.wDir, 1.8f, 2);
+		java.util.Iterator<PlayerRes.Wave> it = r.waves.iterator();
+		while (it.hasNext()) {
+			PlayerRes.Wave wv = it.next();
+			Vec3d from = wv.pos;
+			Vec3d to = from.add(wv.dir.multiply(WAVE_STEP));
+			BlockHitResult hit = w.raycast(new RaycastContext(from, to, RaycastContext.ShapeType.COLLIDER,
+					RaycastContext.FluidHandling.NONE, p));
+			boolean wall = hit.getType() != HitResult.Type.MISS;
+			Vec3d end = wall ? hit.getPos() : to;
+			Box box = new Box(from, end).expand(1.7, 1.5, 1.7);
+			for (LivingEntity e : w.getEntitiesByClass(LivingEntity.class, box,
+					x -> x.isAlive() && x != p && !x.isSpectator() && !(x instanceof TameableEntity tt && tt.isOwner(p)))) {
+				if (wv.hit.add(e.getUuid())) {
+					strike(p, e, base(p) * 2.6f);
+					e.takeKnockback(1.4, -wv.dir.x, -wv.dir.z);
+					e.setVelocity(e.getVelocity().add(0, 0.3, 0));
+					e.velocityModified = true;
+					FxNet.send(w, FxNet.IMPACT, chest(e), wv.dir, 1.8f, 2);
+				}
 			}
-		}
-		r.wPos = end;
-		r.wLeft--;
-		if (wall || r.wLeft <= 0) {
-			r.wActive = false;
-			if (wall) {
-				FxNet.send(w, FxNet.SHOCK, end, Vec3d.ZERO, 3f, 2);
+			wv.pos = end;
+			wv.left--;
+			if (wall || wv.left <= 0) {
+				it.remove();
+				if (wall) {
+					FxNet.send(w, FxNet.SHOCK, end, Vec3d.ZERO, 3f, 2);
+				}
 			}
 		}
 	}
@@ -725,12 +778,19 @@ public final class SlayerEngine {
 		return x * x * (3 - 2 * x);
 	}
 
-	/** Final Judgment: a 16 second cut-scene on the ground. Times in ticks; CutsceneCam script 2 uses the same clock. */
-	private static final int[] J_HIT_T = {116, 136, 150, 164, 176, 194, 204, 214, 226, 262, 270, 278, 290};
-	private static final float[] J_HIT_F = {.10f, .05f, .05f, .05f, .05f, .07f, .07f, .07f, .12f, .06f, .06f, .06f, .19f};
-	/** Ticks at which the Slayer dashes through the target, and where to (along the axis, sideways). */
-	private static final int[] J_PASS_T = {132, 146, 160, 172};
-	private static final double[][] J_PASS_TO = {{2.6, 0.6}, {-2.6, -0.6}, {2.6, -0.3}, {-2.2, 0.0}};
+	/** Final Judgment: a 16 second cut-scene on the ground, timed like the reference clip. Ticks; CutsceneCam script 2 uses the same clock. */
+	// hits: tick, damage share, cut-line angle (degrees, 0 = flat, 90 = upright), pose, heavy (1) / blast (2)
+	private static final int[] J_HIT_T = {118, 121, 125, 135, 145, 185, 195, 205, 210, 215, 220, 230, 260, 270, 280, 292};
+	private static final float[] J_HIT_F = {.05f, .04f, .04f, .04f, .08f, .05f, .05f, .04f, .04f, .04f, .05f, .12f, .08f, .08f, .08f, .12f};
+	private static final float[] J_HIT_ANG = {50f, 35f, -35f, 65f, -50f, 50f, -50f, 5f, -8f, 12f, 70f, -45f, 0f, 0f, 0f, 0f};
+	private static final int[] J_HIT_POSE = {PoseClient.BIGCUT_R, PoseClient.FAST_R, PoseClient.BIGCUT_L, PoseClient.FAST_L,
+			PoseClient.BIGCUT_R, PoseClient.BIGCUT_R, PoseClient.BIGCUT_L, PoseClient.FAST_R, PoseClient.FAST_L,
+			PoseClient.BIGCUT_R, PoseClient.BIGCUT_L, PoseClient.BIGCUT_R, -1, -1, -1, -1};
+	private static final int[] J_HIT_KIND = {1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1, 2, 2, 2, 2};
+	/** Where the Slayer goes: tick, distance along the axis from the target, sideways; each move takes 5 ticks. */
+	private static final double[][] J_MOVE = {
+			{105, -1.8, 0}, {120, 2.6, 0.5}, {132, -2.4, -0.4}, {142, 2.6, 0}, {155, 7.0, 0},
+			{178, -2.0, 0.3}, {190, 2.2, -0.4}, {228, -2.2, 0}, {240, -1.3, 0}};
 
 	private static Vec3d rotY(Vec3d v, double ang) {
 		double c = Math.cos(ang);
@@ -767,86 +827,91 @@ public final class SlayerEngine {
 
 		// where the Slayer is: always on the ground (y of the target)
 		Vec3d side = new Vec3d(-a.z, 0, a.x);
-		Vec3d sp;
-		if (t < 96) {
-			sp = q.subtract(a.multiply(4.0));
-		} else if (t < 112) {
-			sp = lerp3(q.subtract(a.multiply(4.0)), q.subtract(a.multiply(1.6)), ease((t - 96) / 16.0));
-		} else if (t < J_PASS_T[0]) {
-			sp = q.subtract(a.multiply(1.6));
-		} else if (t < 236) {
-			Vec3d prev = q.subtract(a.multiply(1.6));
-			sp = prev;
-			for (int i = 0; i < J_PASS_T.length; i++) {
-				Vec3d to = q.add(a.multiply(J_PASS_TO[i][0])).add(side.multiply(J_PASS_TO[i][1]));
-				if (t >= J_PASS_T[i]) {
-					sp = lerp3(prev, to, ease((t - J_PASS_T[i]) / 4.0));
-				}
-				prev = to;
+		Vec3d prev = q.subtract(a.multiply(4.0));
+		Vec3d sp = prev;
+		for (double[] mv : J_MOVE) {
+			Vec3d to = q.add(a.multiply(mv[1])).add(side.multiply(mv[2]));
+			if (t >= mv[0]) {
+				sp = lerp3(prev, to, ease((t - mv[0]) / 5.0));
 			}
-		} else if (t < 248) {
-			sp = lerp3(q.subtract(a.multiply(2.2)), q.subtract(a.multiply(3.4)), ease((t - 236) / 12.0));
-		} else {
-			sp = q.subtract(a.multiply(3.4));
+			prev = to;
 		}
 		sp = new Vec3d(sp.x, q.y, sp.z);
 		float[] yp = angles(sp.add(0, 1.6, 0), tp.add(0, 1.0, 0));
 		moveTo(p, sp, yp[0], yp[1]);
+		Vec3d toQ = new Vec3d(q.x - sp.x, 0, q.z - sp.z);
+		toQ = toQ.lengthSquared() < 1e-4 ? a : toQ.normalize();
+
+		// dashes
+		for (double[] mv : J_MOVE) {
+			if (t == (long) mv[0]) {
+				Vec3d to = q.add(a.multiply(mv[1])).add(side.multiply(mv[2]));
+				FxNet.send(w, FxNet.DASH, sp.add(0, 1.0, 0), new Vec3d(to.x - sp.x, 0, to.z - sp.z), 0f, 1);
+				if (mv[0] != 240) {
+					anim(p, PoseClient.DASH);
+				}
+			}
+		}
 
 		// events
+		Vec3d chestQ = alive ? chest(target) : tp.add(0, 1.0, 0);
 		if (t == 20) {
 			FxNet.send(w, FxNet.CHARGE, sp, Vec3d.ZERO, 0f, 0);
 		} else if (t == 80) {
-			anim(p, PoseClient.COUNTER); // the hand closes on the hilt
-		} else if (t == 96) {
-			anim(p, PoseClient.DASH);
-			FxNet.send(w, FxNet.DASH, sp.add(0, 1.0, 0), a.multiply(2.4), 0f, 1);
-		} else if (t == 180) {
-			anim(p, PoseClient.LEAP); // sword raised overhead
-			FxNet.send(w, FxNet.WAVE_CHARGE, sp.add(0, 2.4, 0), a, 0f, p.getId());
-		} else if (t == 240) {
-			anim(p, PoseClient.COUNTER); // the pose, sword held back
-		} else if (t == 250) {
-			anim(p, PoseClient.STAB); // the hand comes forward
-			FxNet.send(w, FxNet.WAVE_CHARGE, sp.add(a.multiply(0.9)).add(0, 1.3, 0), a, 0f, p.getId());
-		} else if (t == 260) {
-			FxNet.send(w, FxNet.BLAST, sp.add(a.multiply(0.8)).add(0, 1.2, 0), a, 1.6f, p.getId());
-			FxNet.sendTo(p, FxNet.FLASH, sp, Vec3d.ZERO, 0.8f, 1);
-		}
-		for (int i = 0; i < J_PASS_T.length; i++) {
-			if (t == J_PASS_T[i]) {
-				Vec3d to = q.add(a.multiply(J_PASS_TO[i][0])).add(side.multiply(J_PASS_TO[i][1]));
-				FxNet.send(w, FxNet.DASH, sp.add(0, 1.0, 0), new Vec3d(to.x - sp.x, 0, to.z - sp.z), 0f, 1);
-				anim(p, PoseClient.DASH);
+			anim(p, PoseClient.DRAW);
+		} else if (t == 95) {
+			// the sword comes out: a burst of dark fire and a shock ring
+			FxNet.send(w, FxNet.BERSERK_START, sp, Vec3d.ZERO, 0f, 0);
+			FxNet.send(w, FxNet.SHOCK, sp.add(0, 0.05, 0), Vec3d.ZERO, 6f, 2);
+			FxNet.sendTo(p, FxNet.FLASH, sp, Vec3d.ZERO, 0.8f, 0);
+		} else if (t == 150) {
+			// the cuts burst open all at once
+			for (int k = 0; k < 4; k++) {
+				Vec3d d = side.multiply(Math.cos(Math.toRadians(k * 45))).add(0, Math.sin(Math.toRadians(k * 45)), 0).add(a.multiply(0.25));
+				FxNet.send(w, FxNet.CUTLINE, chestQ, d.normalize(), 14f, 1);
 			}
+			FxNet.send(w, FxNet.SHOCK, new Vec3d(q.x, q.y + 0.05, q.z), Vec3d.ZERO, 7f, 2);
+		} else if (t == 168) {
+			anim(p, PoseClient.RAISE);
+			FxNet.send(w, FxNet.WAVE_CHARGE, sp.add(0, 2.6, 0), toQ, 0f, p.getId());
+		} else if (t == 200 || t == 223) {
+			anim(p, PoseClient.WIND);
+		} else if (t == 244) {
+			anim(p, PoseClient.PALM);
+		} else if (t == 248) {
+			FxNet.send(w, FxNet.WAVE_CHARGE, sp.add(toQ.multiply(0.9)).add(0, 1.4, 0), toQ, 0f, p.getId());
+		} else if (t == 255) {
+			FxNet.send(w, FxNet.BLAST, sp.add(toQ.multiply(0.8)).add(0, 1.3, 0), toQ, 1.9f, p.getId());
+			FxNet.sendTo(p, FxNet.FLASH, sp, Vec3d.ZERO, 0.8f, 1);
 		}
 
 		for (int i = 0; i < J_HIT_T.length; i++) {
 			if (t != J_HIT_T[i]) {
 				continue;
 			}
-			Vec3d chest = alive ? chest(target) : tp.add(0, 1.0, 0);
-			Vec3d dir = chest.subtract(sp.add(0, 1.4, 0));
+			Vec3d dir = chestQ.subtract(sp.add(0, 1.4, 0));
 			dir = dir.lengthSquared() < 1e-6 ? a : dir.normalize();
-			boolean blast = i >= 9;
-			boolean heavy = i == 0 || (i >= 5 && i <= 8);
-			if (!blast) {
+			int kind = J_HIT_KIND[i];
+			if (kind != 2) {
 				p.swingHand(Hand.MAIN_HAND, true);
-				EpicLink.play(p, heavy ? "GREATSWORD_AIR_SLASH" : (i % 2 == 0 ? "GREATSWORD_AUTO1" : "GREATSWORD_AUTO2"));
-				anim(p, heavy ? (i % 2 == 0 ? PoseClient.SLASH_R : PoseClient.SLASH_L) : (i % 2 == 0 ? PoseClient.FAST_R : PoseClient.FAST_L));
-				// the great cuts are long diagonal strokes
-				float ang = heavy ? (i % 2 == 0 ? 55f : -55f) : (i % 2 == 0 ? 15f : -15f);
-				FxNet.send(w, FxNet.SLASH, chest.subtract(dir.multiply(1.2)), dir, ang, heavy ? 2 : 1);
+				EpicLink.play(p, kind == 1 ? "GREATSWORD_AIR_SLASH" : (i % 2 == 0 ? "GREATSWORD_AUTO1" : "GREATSWORD_AUTO2"));
+				anim(p, J_HIT_POSE[i]);
+				FxNet.send(w, FxNet.SLASH, chestQ.subtract(dir.multiply(1.2)), dir, J_HIT_ANG[i], kind == 1 ? 2 : 1);
+				// the long light line of the cut, straight through the target
+				Vec3d ts = new Vec3d(-toQ.z, 0, toQ.x);
+				double ang = Math.toRadians(J_HIT_ANG[i]);
+				Vec3d line = ts.multiply(Math.cos(ang)).add(0, Math.sin(ang), 0).add(toQ.multiply(0.3)).normalize();
+				FxNet.send(w, FxNet.CUTLINE, chestQ, line, kind == 1 ? 18f : 12f, kind);
 			}
 			if (alive) {
 				strike(p, target, r.jTotal * J_HIT_F[i]);
 			}
-			FxNet.send(w, FxNet.IMPACT, chest, dir, heavy || i == 12 ? 2.2f : 1.1f, heavy ? 2 : 0);
-			if (i == 0 || i == 8) {
+			FxNet.send(w, FxNet.IMPACT, chestQ, dir, kind == 1 || i == 15 ? 2.2f : 1.1f, kind == 1 ? 2 : 0);
+			if (i == 4 || i == 11) {
 				FxNet.send(w, FxNet.SHOCK, new Vec3d(q.x, q.y + 0.05, q.z), Vec3d.ZERO, 7f, 2);
-			} else if (i == 9) {
-				FxNet.send(w, FxNet.SHOCK, new Vec3d(q.x, q.y + 0.05, q.z), Vec3d.ZERO, 9f, 2);
 			} else if (i == 12) {
+				FxNet.send(w, FxNet.SHOCK, new Vec3d(q.x, q.y + 0.05, q.z), Vec3d.ZERO, 9f, 2);
+			} else if (i == 15) {
 				FxNet.send(w, FxNet.SHOCK, new Vec3d(q.x, q.y + 0.05, q.z), Vec3d.ZERO, 14f, 2);
 				FxNet.sendTo(p, FxNet.FLASH, sp, Vec3d.ZERO, 0.6f, 1);
 			}
@@ -898,7 +963,8 @@ public final class SlayerEngine {
 		r.slashAt = 0;
 		r.pTarget = null;
 		r.fPhase = 0;
-		r.wActive = false;
+		r.fCharging = false;
+		r.waves.clear();
 		p.setNoGravity(false);
 		if (r.jTarget != null) {
 			Entity e = p.getServerWorld().getEntity(r.jTarget);

@@ -186,11 +186,19 @@ public class PlayerRes {
 	public int fPhase = 0;
 	public long fHoldStart = 0;
 	/** The red energy wave fired when Fatal Strike lands. */
-	public boolean wActive = false;
-	public net.minecraft.util.math.Vec3d wPos = null;
-	public net.minecraft.util.math.Vec3d wDir = null;
-	public int wLeft = 0;
-	public final java.util.Set<java.util.UUID> wHit = new java.util.HashSet<>();
+	/** Fatal Strike: the sword waves in flight. */
+	public static final class Wave {
+		public net.minecraft.util.math.Vec3d pos;
+		public net.minecraft.util.math.Vec3d dir;
+		public int left;
+		public final java.util.Set<java.util.UUID> hit = new java.util.HashSet<>();
+	}
+
+	public final java.util.List<Wave> waves = new java.util.ArrayList<>();
+	public boolean fCharging = false;
+	public long fChargeStart = 0;
+	public boolean fChargeFull = false;
+	public net.minecraft.util.math.Vec3d fFrom = null;
 	/** Slash lands a moment after the key press (when the swing connects): tick, and which way it swings. */
 	public long slashAt = 0;
 	public boolean slashFlipNow = false;

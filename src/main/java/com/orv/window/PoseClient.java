@@ -36,6 +36,13 @@ public final class PoseClient {
 	public static final int COUNTER = 8;
 	public static final int FAST_R = 9;
 	public static final int FAST_L = 10;
+	/** Final Judgment poses. */
+	public static final int DRAW = 11;
+	public static final int RAISE = 12;
+	public static final int WIND = 13;
+	public static final int PALM = 14;
+	public static final int BIGCUT_R = 15;
+	public static final int BIGCUT_L = 16;
 
 	static final class Sample {
 		Vec3d base;
@@ -87,6 +94,11 @@ public final class PoseClient {
 			case ROAR -> 3.0f;
 			case COUNTER -> 0.6f;
 			case FAST_R, FAST_L -> 0.26f;
+			case DRAW -> 1.0f;
+			case RAISE -> 1.2f;
+			case WIND -> 1.3f;
+			case PALM -> 1.4f;
+			case BIGCUT_R, BIGCUT_L -> 0.8f;
 			default -> 0.4f;
 		};
 	}
@@ -182,6 +194,42 @@ public final class PoseClient {
 			r(2.75f, 0.3f, 0f, 0.2f, 0.3f, 0f, -0.2f, 0.5f, 0f, 0.3f, 0f, 0f, 0f, -0.8f),
 			r(3.00f, -0.3f, 0f, 0.1f, 0f, 0f, -0.1f, 0f, 0f, 0f, 0f, 0f, 0f, -0.8f)};
 
+	// the hand reaches over the shoulder for the hilt, then the sword comes up high
+	private static final float[][] K_DRAW = {
+			ready(0f),
+			r(0.15f, -2.7f, -0.7f, 0.3f, -0.1f, 0f, -0.15f, 0.05f, -0.3f, 0.1f, 0f, 0f, 0f, -0.3f),
+			r(0.40f, -2.7f, -0.7f, 0.3f, -0.1f, 0f, -0.15f, 0.05f, -0.3f, 0.1f, 0f, 0f, 0f, -0.3f),
+			r(0.58f, -3.05f, 0.15f, 0.3f, -0.35f, 0f, -0.3f, -0.15f, 0f, -0.2f, -0.1f, 0.1f, 0f, -0.05f),
+			r(1.00f, -3.05f, 0.15f, 0.3f, -0.35f, 0f, -0.3f, -0.15f, 0f, -0.2f, -0.1f, 0.1f, 0f, -0.05f)};
+	// both hands high overhead, leaning back
+	private static final float[][] K_RAISE = {
+			ready(0f),
+			r(0.22f, -3.0f, 0.2f, 0.3f, -2.9f, -0.1f, -0.2f, -0.35f, 0.15f, -0.45f, 0.3f, -0.3f, 0f, -0.1f),
+			r(1.20f, -3.0f, 0.2f, 0.3f, -2.9f, -0.1f, -0.2f, -0.35f, 0.15f, -0.45f, 0.3f, -0.3f, 0f, -0.1f)};
+	// low stance, the sword held back at the right side, body twisted
+	private static final float[][] K_WIND = {
+			ready(0f),
+			r(0.20f, 0.6f, 0.45f, 0.35f, -0.7f, 0.5f, -0.2f, 0.3f, 0.65f, 0.15f, -0.55f, 0.5f, 0.15f, 0.6f),
+			r(1.30f, 0.6f, 0.45f, 0.35f, -0.7f, 0.5f, -0.2f, 0.3f, 0.65f, 0.15f, -0.55f, 0.5f, 0.15f, 0.6f)};
+	// the left palm thrust forward, the sword held back in the right hand
+	private static final float[][] K_PALM = {
+			r(0f, 0.6f, 0.45f, 0.35f, -0.7f, 0.5f, -0.2f, 0.3f, 0.65f, 0.15f, -0.55f, 0.5f, 0.15f, 0.6f),
+			r(0.18f, 0.5f, 0.5f, 0.4f, -1.6f, -0.1f, 0f, 0.25f, -0.45f, 0.05f, -0.6f, 0.6f, -0.2f, 0.5f),
+			r(1.40f, 0.5f, 0.5f, 0.4f, -1.6f, -0.1f, 0f, 0.25f, -0.45f, 0.05f, -0.6f, 0.6f, -0.2f, 0.5f)};
+	// a great diagonal cut: high wind-up, then down through the whole body with a deep lunge
+	private static final float[][] K_BIGCUT_R = {
+			ready(0f),
+			r(0.18f, -2.9f, 1.0f, 0.5f, -2.7f, 1.2f, -0.2f, -0.25f, 0.8f, -0.2f, 0.3f, -0.3f, 0.3f, -0.3f),
+			r(0.30f, -0.6f, -1.4f, 0.2f, -0.8f, -0.9f, -0.2f, 0.5f, -1.1f, 0.25f, -0.7f, 0.7f, -0.45f, -0.1f),
+			r(0.60f, -0.6f, -1.4f, 0.2f, -0.8f, -0.9f, -0.2f, 0.5f, -1.1f, 0.25f, -0.7f, 0.7f, -0.45f, -0.1f),
+			ready(0.80f)};
+	private static final float[][] K_BIGCUT_L = {
+			ready(0f),
+			r(0.18f, -2.9f, -1.2f, 0.2f, -2.8f, -0.9f, -0.2f, -0.25f, -0.8f, -0.2f, -0.3f, 0.3f, -0.3f, -0.3f),
+			r(0.30f, -0.7f, 1.3f, 0.4f, -0.7f, 1.6f, -0.2f, 0.5f, 1.1f, 0.25f, 0.7f, -0.7f, 0.45f, -0.4f),
+			r(0.60f, -0.7f, 1.3f, 0.4f, -0.7f, 1.6f, -0.2f, 0.5f, 1.1f, 0.25f, 0.7f, -0.7f, 0.45f, -0.4f),
+			ready(0.80f)};
+
 	private static float smooth(float x) {
 		x = x < 0f ? 0f : (x > 1f ? 1f : x);
 		return x * x * (3f - 2f * x);
@@ -216,6 +264,12 @@ public final class PoseClient {
 			case SLAM -> keys(K_SLAM, t, o);
 			case DASH -> keys(K_DASH, t, o);
 			case COUNTER -> keys(K_COUNTER, t, o);
+			case DRAW -> keys(K_DRAW, t, o);
+			case RAISE -> keys(K_RAISE, t, o);
+			case WIND -> keys(K_WIND, t, o);
+			case PALM -> keys(K_PALM, t, o);
+			case BIGCUT_R -> keys(K_BIGCUT_R, t, o);
+			case BIGCUT_L -> keys(K_BIGCUT_L, t, o);
 			case JUDGE -> {
 				keys(K_JUDGE, t, o);
 				if (t > 1.05f && t < 2.55f) {
