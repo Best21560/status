@@ -75,7 +75,7 @@ final class FireFx {
 	}
 
 	private static final float[][] RED = {
-			{22, 0, 2}, {95, 0, 6}, {170, 6, 12}, {230, 22, 22}, {255, 70, 52}, {255, 150, 128}
+			{14, 0, 2}, {70, 0, 5}, {130, 4, 10}, {185, 14, 16}, {215, 44, 34}, {230, 96, 80}
 	};
 	/** Shadow flames: black-violet body, purple edge, pale lilac only in the hottest core. */
 	private static final float[][] PURPLE = {

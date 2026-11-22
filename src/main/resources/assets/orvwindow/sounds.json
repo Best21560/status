@@ -78,5 +78,20 @@
     "sounds": [
       "orvwindow:jfinal"
     ]
+  },
+  "jcutin": {
+    "sounds": [
+      "orvwindow:jcutin"
+    ]
+  },
+  "jblast": {
+    "sounds": [
+      "orvwindow:jblast"
+    ]
+  },
+  "jgather": {
+    "sounds": [
+      "orvwindow:jgather"
+    ]
   }
 }

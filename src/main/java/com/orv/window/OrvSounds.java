@@ -20,4 +20,7 @@ public class OrvSounds {
 	public static final SoundEvent JHEAVY = SoundEvent.of(new Identifier("orvwindow", "jheavy"));
 	public static final SoundEvent JFLARE = SoundEvent.of(new Identifier("orvwindow", "jflare"));
 	public static final SoundEvent JFINAL = SoundEvent.of(new Identifier("orvwindow", "jfinal"));
+	public static final SoundEvent JCUTIN = SoundEvent.of(new Identifier("orvwindow", "jcutin"));
+	public static final SoundEvent JBLAST = SoundEvent.of(new Identifier("orvwindow", "jblast"));
+	public static final SoundEvent JGATHER = SoundEvent.of(new Identifier("orvwindow", "jgather"));
 }

@@ -150,6 +150,7 @@ public final class Fx {
 				return;
 			}
 			case FxNet.CUTSCENE_START -> {
+				CutsceneCam.setAxis(dir);
 				startCutscene(mc, b, Math.round(a));
 				return;
 			}
@@ -193,6 +194,7 @@ public final class Fx {
 				case FxNet.LEAP -> a + 0.6f;
 				case FxNet.WAVE -> a + 0.7f;
 				case FxNet.WAVE_CHARGE -> 0.9f;
+				case FxNet.BLAST -> a + 0.7f;
 			case FxNet.LB_CIRCLE -> 1.4f;
 			case FxNet.PROJ -> Math.max(0.2f, a) + 0.1f;
 			case FxNet.HEAL_PULSE -> 1.0f;
@@ -200,6 +202,10 @@ public final class Fx {
 			case FxNet.HALO_BURST -> 0.9f;
 			default -> 0.4f;
 		};
+		if (type == FxNet.BLAST) {
+			e.maxDist = 22.0;
+			shake(3.0f, 30);
+		}
 		if (type == FxNet.WAVE && dir.lengthSquared() > 1e-6) {
 			Vec3d dn = dir.normalize();
 			net.minecraft.util.hit.BlockHitResult wr = mc.world.raycast(new net.minecraft.world.RaycastContext(pos,
@@ -288,6 +294,11 @@ public final class Fx {
 				vol = 1.0f;
 				pitch = b == 1 ? 1.3f : 1.1f;
 			}
+			case FxNet.BLAST -> {
+				s = OrvSounds.JBLAST;
+				vol = 2.4f;
+				pitch = 1f;
+			}
 			case FxNet.WAVE -> {
 				mc.world.playSound(p.x, p.y, p.z, OrvSounds.BOOM, SoundCategory.PLAYERS, 1.4f, 0.7f, false);
 				s = OrvSounds.SLASH;
@@ -341,13 +352,55 @@ public final class Fx {
 				}
 				return true;
 			}
-			case FxNet.WAVE, FxNet.CHARGE, FxNet.WAVE_CHARGE -> {
+			case FxNet.BLAST -> {
+				mc.world.playSound(p.x, p.y, p.z, OrvSounds.JBLAST, SoundCategory.PLAYERS, 2.4f, 1f, false);
+				return true;
+			}
+			case FxNet.CHARGE -> {
+				mc.world.playSound(p.x, p.y, p.z, OrvSounds.JGATHER, SoundCategory.PLAYERS, 1.2f, 1f, false);
+				return true;
+			}
+			case FxNet.WAVE, FxNet.WAVE_CHARGE -> {
 				return true;
 			}
 			default -> {
 				return false;
 			}
 		}
+	}
+
+	/**
+	 * The grim look: colours lose a third of their saturation and brightness, the hottest whites turn into a dull
+	 * ash-red instead of pure white, light is weaker and smoke is heavier.
+	 */
+	static int toGloom(int argb, boolean additive) {
+		int al = (argb >>> 24) & 255;
+		float r = ((argb >> 16) & 255) / 255f;
+		float g = ((argb >> 8) & 255) / 255f;
+		float b = (argb & 255) / 255f;
+		float l = 0.3f * r + 0.59f * g + 0.11f * b;
+		float sat = 0.68f;
+		r = l + (r - l) * sat;
+		g = l + (g - l) * sat;
+		b = l + (b - l) * sat;
+		if (additive) {
+			// compress highlights and pull them toward a deep blood red
+			float hi = Math.max(r, Math.max(g, b));
+			float k = hi > 0.6f ? (hi - 0.6f) / 0.4f : 0f;
+			r = r * 0.82f;
+			g = g * (0.7f - 0.25f * k);
+			b = b * (0.72f - 0.3f * k);
+			al = Math.round(al * 0.78f);
+		} else {
+			r *= 0.55f;
+			g *= 0.5f;
+			b *= 0.55f;
+			al = Math.min(255, Math.round(al * 1.3f));
+		}
+		int nr = Math.max(0, Math.min(255, Math.round(r * 255f)));
+		int ng = Math.max(0, Math.min(255, Math.round(g * 255f)));
+		int nb = Math.max(0, Math.min(255, Math.round(b * 255f)));
+		return (al << 24) | (nr << 16) | (ng << 8) | nb;
 	}
 
 	/** Maps any colour to the purple-black shadow palette by its brightness (dark stays black, bright turns pale lilac). */
@@ -375,8 +428,8 @@ public final class Fx {
 
 	private static void flash(float power, int rgb) {
 		flashAt = System.nanoTime();
-		flashPower = power;
-		flashRgb = rgb;
+		flashPower = power * 0.7f;
+		flashRgb = rgb == 0xFFFFFF ? 0xD8CCCC : 0xC85040;
 	}
 
 	/** front = the Berserk cut-scene: the camera looks at the Slayer's face. */
@@ -394,7 +447,7 @@ public final class Fx {
 			CutsceneCam.start(1, targetId);
 		} else if (kind == 3) {
 			CutsceneCam.start(2, targetId);
-			mc.getSoundManager().play(net.minecraft.client.sound.PositionedSoundInstance.master(OrvSounds.JSTAR, 1f, 1f));
+			mc.getSoundManager().play(net.minecraft.client.sound.PositionedSoundInstance.master(OrvSounds.JCUTIN, 1f, 1f));
 		}
 		mc.options.setPerspective(front ? Perspective.THIRD_PERSON_FRONT : Perspective.THIRD_PERSON_BACK);
 	}
@@ -456,6 +509,10 @@ public final class Fx {
 		private boolean begun = false;
 		/** Draw in the Rogue's purple-black instead of the original colours. */
 		boolean shadow = false;
+		/** Grade the colours darker and duller (every skill but the Lightbender's light). */
+		boolean gloom = true;
+		/** This pen draws the additive light pass (else the dark, normally blended pass). */
+		boolean additive = false;
 
 		/** Draws what was collected (the buffer is only opened when the first vertex arrives, so it is never empty). */
 		void flush() {
@@ -514,6 +571,8 @@ public final class Fx {
 		void v(Vec3d p, int argb) {
 			if (shadow) {
 				argb = toShadow(argb);
+			} else if (gloom) {
+				argb = toGloom(argb, additive);
 			}
 			if (!begun) {
 				begun = true;
@@ -741,6 +800,7 @@ public final class Fx {
 				case FxNet.CHARGE -> darkCharge(dark, e, tt);
 				case FxNet.LEAP -> drawLeap(dark, e, age, true);
 				case FxNet.WAVE -> darkWave(dark, e, age);
+				case FxNet.BLAST -> darkBlast(dark, e, age);
 				default -> {
 				}
 			}
@@ -754,6 +814,7 @@ public final class Fx {
 		// pass 2: glowing light, additive
 		RenderSystem.blendFunc(GlStateManager.SrcFactor.SRC_ALPHA, GlStateManager.DstFactor.ONE);
 		Pen pen = new Pen(Tessellator.getInstance().getBuffer(), m, cam);
+		pen.additive = true;
 		Iterator<Effect> it = LIST.iterator();
 		while (it.hasNext()) {
 			Effect e = it.next();
@@ -764,6 +825,7 @@ public final class Fx {
 			}
 			float tt = age / e.life;
 			pen.shadow = e.shadow;
+			pen.gloom = e.type < FxNet.LB_CIRCLE || e.type > FxNet.HALO_BURST;
 			switch (e.type) {
 				case FxNet.SLASH -> drawSlash(pen, e, tt, age);
 				case FxNet.IMPACT -> drawImpact(pen, e, tt, age);
@@ -775,6 +837,7 @@ public final class Fx {
 				case FxNet.CHARGE -> drawCharge(pen, e, tt);
 				case FxNet.LEAP -> drawLeap(pen, e, age, false);
 				case FxNet.WAVE -> drawWave(pen, e, age);
+				case FxNet.BLAST -> drawBlast(pen, e, age);
 				case FxNet.WAVE_CHARGE -> drawHold(pen, e, tt);
 				case FxNet.LB_CIRCLE -> LightClient.drawCircle(pen, e.pos, e.dir, e.a, e.b, tt);
 				case FxNet.PROJ -> LightClient.drawProj(pen, e.pos, e.dir, age, e.a);
@@ -789,7 +852,9 @@ public final class Fx {
 		if (auraK > 0f) {
 			drawAura(pen, mc, td, auraK);
 		}
+		pen.gloom = false;
 		LightClient.render(pen, mc, td);
+		pen.gloom = true;
 		RogueClient.drawGlow(pen, mc, td);
 		pen.flush();
 
@@ -1288,6 +1353,88 @@ public final class Fx {
 	private static Vec3d waveHead(Effect e, float age) {
 		Vec3d d = e.dir.lengthSquared() < 1e-6 ? new Vec3d(0, 0, 1) : e.dir.normalize();
 		return e.pos.add(d.multiply(Math.min(e.maxDist, 34.0 * age)));
+	}
+
+	/** 0..1: how far the blast has grown out, and its fade at the end. */
+	private static float blastGrow(Effect e, float age) {
+		return clamp01(age / 0.22f);
+	}
+
+	private static float blastFade(Effect e, float age) {
+		return 1f - clamp01((age - e.a) / 0.7f);
+	}
+
+	/** The black body of the blast: a churning sheath of smoke around the beam, and smoke left hanging behind. */
+	private static void darkBlast(Pen dark, Effect e, float age) {
+		Vec3d d = e.dir.lengthSquared() < 1e-6 ? new Vec3d(0, 0, 1) : e.dir.normalize();
+		double len = e.maxDist * blastGrow(e, age);
+		float fade = blastFade(e, age);
+		Vec3d end = e.pos.add(d.multiply(len));
+		dark.streak(e.pos, end, 3.6, argb(0x050204, 0.55f * fade), argb(0x050204, 0.35f * fade));
+		for (int i = 0; i < 46; i++) {
+			double u = rnd(e.seed, i + 100);
+			if (u * e.maxDist > len) {
+				continue;
+			}
+			double drift = age * (0.4 + 0.8 * rnd(e.seed, i + 140));
+			double ang = rnd(e.seed, i + 120) * Math.PI * 2 + age * (rnd(e.seed, i + 160) - 0.5) * 3;
+			Vec3d right = new Vec3d(-d.z, 0, d.x);
+			Vec3d off = right.multiply(Math.cos(ang) * (1.3 + drift)).add(0, Math.sin(ang) * (1.1 + drift) + drift * 0.6, 0);
+			Vec3d p = e.pos.add(d.multiply(u * e.maxDist)).add(off);
+			float a = (0.25f + 0.25f * rnd(e.seed, i + 180)) * Math.min(1f, fade * 1.4f);
+			dark.glow(p, 1.0 + 1.4 * rnd(e.seed, i + 200) + drift, i % 3 == 0 ? 0x1A0808 : 0x0A0608, a);
+		}
+	}
+
+	/** The beam itself: a deep crimson column with a dull hot core, writhing tendrils of red and embers flying off. */
+	private static void drawBlast(Pen pen, Effect e, float age) {
+		Vec3d d = e.dir.lengthSquared() < 1e-6 ? new Vec3d(0, 0, 1) : e.dir.normalize();
+		Vec3d right = new Vec3d(-d.z, 0, d.x);
+		double len = e.maxDist * blastGrow(e, age);
+		float fade = blastFade(e, age);
+		if (fade <= 0f) {
+			return;
+		}
+		float flick = 0.85f + 0.15f * (float) Math.sin(age * 47.0);
+		Vec3d end = e.pos.add(d.multiply(len));
+		double swell = 1.0 + 0.25 * Math.sin(age * 9.0);
+		pen.streak(e.pos, end, 3.0 * swell, argb(0x8A0606, 0.32f * fade), argb(0x5A0404, 0.2f * fade));
+		pen.streak(e.pos, end, 1.6 * swell, argb(0xD01810, 0.55f * fade * flick), argb(0xA01008, 0.4f * fade));
+		pen.streak(e.pos, end, 0.55, argb(0xFF8060, 0.85f * fade * flick), argb(0xFF5030, 0.6f * fade));
+		// writhing tendrils wound around the beam
+		int segs = 28;
+		for (int k = 0; k < 4; k++) {
+			double ph = k * Math.PI / 2 + age * (k % 2 == 0 ? 6 : -5);
+			Vec3d prev = null;
+			for (int i = 0; i <= segs; i++) {
+				double u = i / (double) segs;
+				double ang = ph + u * 9.0;
+				double rr = 0.7 + 0.35 * Math.sin(u * 13 + age * 7 + k);
+				Vec3d p = e.pos.add(d.multiply(u * len)).add(right.multiply(Math.cos(ang) * rr)).add(0, Math.sin(ang) * rr, 0);
+				if (prev != null) {
+					pen.streak(prev, p, 0.12, argb(0xE02010, 0.55f * fade), argb(0xE02010, 0.55f * fade));
+				}
+				prev = p;
+			}
+		}
+		// the source at the hand and the impact at the far end
+		pen.glow(e.pos, 1.8, 0xB01008, 0.5f * fade);
+		pen.glow(e.pos, 0.6, 0xFF9070, 0.8f * fade * flick);
+		pen.glow(end, 3.2, 0x900A06, 0.45f * fade);
+		pen.glow(end, 1.2, 0xFF6040, 0.6f * fade * flick);
+		// embers
+		for (int i = 0; i < 40; i++) {
+			float life = 0.4f + 0.5f * rnd(e.seed, i + 300);
+			float born = rnd(e.seed, i + 320) * Math.max(0.01f, Math.min(age, e.a));
+			float k = (age - born) / life;
+			if (k < 0f || k >= 1f) {
+				continue;
+			}
+			double u = rnd(e.seed, i + 340) * len;
+			Vec3d p0 = e.pos.add(d.multiply(u)).add(right.multiply((rnd(e.seed, i + 360) - 0.5) * 2.4 * (1 + k)))
+					.add(0, (rnd(e.seed, i + 380) - 0.4) * 1.6 + 1.2 * k, 0);
+			pen.glow(p0, 0.05 + 0.05 * (1 - k), mix(0xFFB080, 0x700804, k), 0.9f * (1 - k) * fade);
+		}
 	}
 
 	private static float waveFade(Effect e, float age) {

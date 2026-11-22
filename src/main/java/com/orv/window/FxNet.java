@@ -49,6 +49,8 @@ public final class FxNet {
 	public static final int SHADOW_BURST = 23;
 	/** Added to an effect type: draw it in the purple-black shadow colours of the Rogue. */
 	public static final int SHADOW = 256;
+	/** Final Judgment energy blast: pos = start, dir = direction, a = seconds, b = caster id. */
+	public static final int BLAST = 24;
 
 	private static PacketByteBuf make(int type, Vec3d pos, Vec3d dir, float a, int b) {
 		PacketByteBuf out = PacketByteBufs.create();
